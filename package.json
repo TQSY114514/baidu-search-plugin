@@ -1,0 +1,26 @@
+{
+  "name": "@TQSY114514/baidu-search-plugin",
+  "version": "1.0.0",
+  "description": "Baidu Qianfan AI Search provider for OpenClaw web_search",
+  "type": "module",
+  "files": [
+    "index.js",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "license": "MIT",
+  "openclaw": {
+    "extensions": ["./index.js"],
+    "compat": {
+      "pluginApi": ">=2026.7.1"
+    }
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.7.1"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  }
+}
