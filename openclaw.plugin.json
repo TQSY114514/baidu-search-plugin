@@ -2,13 +2,8 @@
   "id": "baidu",
   "name": "Baidu AI Search",
   "description": "Baidu Qianfan AI Search provider plugin for web search.",
-  "uiHints": {
-    "webSearch.apiKey": {
-      "label": "Baidu AI Search API Key",
-      "help": "Baidu Qianfan AI Search API key (bce-v3/ALTAK-...). Fallback: BAIDU_API_KEY env var.",
-      "sensitive": true,
-      "placeholder": "bce-v3/ALTAK-..."
-    }
+  "contracts": {
+    "webSearchProviders": ["baidu"]
   },
   "configSchema": {
     "type": "object",
