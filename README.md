@@ -10,7 +10,7 @@ OpenClaw `web_search` 的百度 AI 搜索 Provider。调用百度千帆 `v2/ai_s
 ## 安装
 
 ```bash
-openclaw plugins install clawhub:@your-owner/baidu-search-plugin
+openclaw plugins install clawhub:@tqsy114514/baidu-search-plugin
 ```
 
 ## 配置

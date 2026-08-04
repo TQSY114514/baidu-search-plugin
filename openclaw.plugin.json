@@ -2,18 +2,6 @@
   "id": "baidu",
   "name": "Baidu AI Search",
   "description": "Baidu Qianfan AI Search provider plugin for web search.",
-  "activation": {
-    "onStartup": false
-  },
-  "setup": {
-    "providers": [
-      {
-        "id": "baidu",
-        "authMethods": ["api-key"],
-        "envVars": ["BAIDU_API_KEY"]
-      }
-    ]
-  },
   "uiHints": {
     "webSearch.apiKey": {
       "label": "Baidu AI Search API Key",
