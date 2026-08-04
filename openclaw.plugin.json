@@ -10,9 +10,6 @@
       "placeholder": "bce-v3/ALTAK-..."
     }
   },
-  "contracts": {
-    "webSearchProviders": ["baidu"]
-  },
   "configSchema": {
     "type": "object",
     "additionalProperties": false,

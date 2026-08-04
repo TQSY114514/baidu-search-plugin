@@ -1,6 +1,6 @@
 {
   "name": "@TQSY114514/baidu-search-plugin",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Baidu Qianfan AI Search provider for OpenClaw web_search",
   "type": "module",
   "files": [
