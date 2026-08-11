@@ -19,14 +19,17 @@ jobs:
       - name: Fetch downloads and update data
         run: node .github/track-downloads.mjs
 
+      - name: Render chart SVG
+        run: node .github/render-chart.mjs
+
       - name: Commit if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add downloads.json
+          git add downloads.json chart.svg
           if git diff --cached --quiet; then
             echo "No changes, skip commit"
           else
-            git commit -m "chore: update ClawHub download stats"
+            git commit -m "chore: update ClawHub download stats and chart"
             git push
           fi

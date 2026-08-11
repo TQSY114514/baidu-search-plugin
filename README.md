@@ -2,9 +2,10 @@
 
 ![ClawHub downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fclawhub.ai%2Fapi%2Fv1%2Fpackages%2F%40tqsy114514%2Fbaidu-search-plugin&query=package.stats.downloads&label=ClawHub%20downloads&color=success&style=for-the-badge)
 
-![ClawHub downloads trend](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FTQSY114514%2Fbaidu-search-plugin%2Fmaster%2Fdownloads.json&query=values&label=downloads%20trend&color=success&style=for-the-badge)
+<img src="chart.svg" alt="ClawHub downloads trend" width="720">
 
-> 趋势图数据由 GitHub Actions 每天自动抓取 ClawHub API 记录（见 `.github/workflows/track-downloads.yml`），历史数据见 [`downloads.json`](downloads.json)。
+> 趋势图数据由 GitHub Actions 每天自动抓取 ClawHub API 并重绘（见 `.github/workflows/track-downloads.yml`），
+> 历史数据见 [`downloads.json`](downloads.json)。
 
 OpenClaw `web_search` 的百度 AI 搜索 Provider。调用百度千帆 `v2/ai_search`
 接口，返回结构化搜索结果（标题、链接、摘要、发布时间、站点名）。
