@@ -2,8 +2,8 @@ name: Track ClawHub downloads
 
 on:
   schedule:
-    # 每天 02:00 UTC = 北京时间 10:00
-    - cron: '0 2 * * *'
+    # 每天 15:00 UTC = 北京时间 23:00（记录当天完整累计，深夜负载低）
+    - cron: '0 15 * * *'
   workflow_dispatch:
 
 permissions:
