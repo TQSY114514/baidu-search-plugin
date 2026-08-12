@@ -1,6 +1,6 @@
 # Baidu AI Search Plugin for OpenClaw
 
-![ClawHub downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fclawhub.ai%2Fapi%2Fv1%2Fpackages%2F%40tqsy114514%2Fbaidu-search-plugin&query=package.stats.downloads&label=ClawHub%20downloads&color=success&style=for-the-badge)
+![ClawHub downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FTQSY114514%2Fbaidu-search-plugin%2Fmaster%2Fdownloads.json&query=latest&label=ClawHub%20downloads&color=success&style=for-the-badge)
 
 <img src="chart.svg" alt="ClawHub downloads trend" width="720">
 
