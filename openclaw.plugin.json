@@ -2,6 +2,10 @@
   "id": "baidu",
   "name": "Baidu AI Search",
   "description": "Baidu Qianfan AI Search provider plugin for web search.",
+  "categories": ["web"],
+  "activation": {
+    "onStartup": false
+  },
   "contracts": {
     "webSearchProviders": ["baidu"]
   },
@@ -18,6 +22,13 @@
           }
         }
       }
+    }
+  },
+  "uiHints": {
+    "webSearch.apiKey": {
+      "label": "Baidu Qianfan AI Search API Key",
+      "help": "bce-v3/ALTAK-... 格式的千帆 API Key。也可用 QIANFAN_API_KEY 环境变量，或用 SecretRef 引用已存密钥。",
+      "sensitive": true
     }
   }
 }

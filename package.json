@@ -1,26 +1,41 @@
 {
-  "name": "@TQSY114514/baidu-search-plugin",
-  "version": "1.0.3",
+  "name": "@tqsy114514/baidu-search-plugin",
+  "version": "1.1.0",
   "description": "Baidu Qianfan AI Search provider for OpenClaw web_search",
   "type": "module",
   "files": [
     "index.js",
+    "lib",
     "openclaw.plugin.json",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "license": "MIT",
+  "scripts": {
+    "test": "node --test"
+  },
   "openclaw": {
     "extensions": ["./index.js"],
+    "install": {
+      "clawhubSpec": "clawhub:@tqsy114514/baidu-search-plugin",
+      "npmSpec": "@tqsy114514/baidu-search-plugin",
+      "defaultChoice": "clawhub",
+      "minHostVersion": ">=2026.9.4",
+      "allowInvalidConfigRecovery": true
+    },
     "compat": {
-      "pluginApi": ">=2026.7.1"
+      "pluginApi": ">=2026.9.4"
     },
     "build": {
-      "openclawVersion": "2026.7.1",
-      "pluginSdkVersion": "2026.7.1"
+      "openclawVersion": "2026.9.4",
+      "bundledDist": false
+    },
+    "release": {
+      "publishToClawHub": true
     }
   },
   "peerDependencies": {
-    "openclaw": ">=2026.7.1"
+    "openclaw": ">=2026.9.4"
   },
   "peerDependenciesMeta": {
     "openclaw": {
