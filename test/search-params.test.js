@@ -3,7 +3,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildBaiduRequestBody,
-  freshnessToPageTimeRange,
   mapBaiduReferences,
   resolveSiteName,
 } from "../lib/search-params.js";
@@ -36,18 +35,17 @@ test("buildBaiduRequestBody: date range maps to search_filter.range.page_time", 
   });
 });
 
-test("buildBaiduRequestBody: freshness maps to a page_time range", () => {
+test("buildBaiduRequestBody: freshness maps to top-level search_recency_filter", () => {
   const body = buildBaiduRequestBody({
     query: "q",
     count: 5,
-    timeFilters: { freshness: "pw" },
+    timeFilters: { freshness: "week" },
     sites: [],
     excludedSites: [],
   });
-  const range = body.search_filter.range.page_time;
-  assert.match(range.gte, /^\d{4}-\d{2}-\d{2}$/);
-  assert.match(range.lt, /^\d{4}-\d{2}-\d{2}$/);
-  assert.ok(range.gte < range.lt, `gte ${range.gte} should be before lt ${range.lt}`);
+  assert.equal(body.search_recency_filter, "week");
+  // The undocumented page_time range must not be emitted for freshness.
+  assert.equal(body.search_filter, undefined);
 });
 
 test("buildBaiduRequestBody: date range wins when freshness is absent but both not present", () => {
@@ -79,30 +77,16 @@ test("buildBaiduRequestBody: sites map to match.site and excludedSites to block_
   assert.deepEqual(body.block_websites, ["spam.example"]);
 });
 
-test("buildBaiduRequestBody: site filter combines with time range into one search_filter", () => {
+test("buildBaiduRequestBody: site filter combines with a recency filter", () => {
   const body = buildBaiduRequestBody({
     query: "q",
     count: 5,
-    timeFilters: { freshness: "pm" },
+    timeFilters: { freshness: "month" },
     sites: ["baidu.com"],
     excludedSites: [],
   });
   assert.ok(body.search_filter.match.site.includes("baidu.com"));
-  assert.ok(body.search_filter.range.page_time.gte);
-});
-
-test("freshnessToPageTimeRange: maps each shortcut to a date window", () => {
-  for (const f of ["pd", "pw", "pm", "py"]) {
-    const range = freshnessToPageTimeRange(f);
-    assert.ok(range?.gte && /^\d{4}-\d{2}-\d{2}$/.test(range.gte), `${f}: gte`);
-    assert.ok(range?.lt && /^\d{4}-\d{2}-\d{2}$/.test(range.lt), `${f}: lt`);
-    assert.ok(range.gte < range.lt, `${f}: gte before lt`);
-  }
-});
-
-test("freshnessToPageTimeRange: unsupported shortcut returns undefined", () => {
-  assert.equal(freshnessToPageTimeRange("decade"), undefined);
-  assert.equal(freshnessToPageTimeRange(undefined), undefined);
+  assert.equal(body.search_recency_filter, "month");
 });
 
 test("mapBaiduReferences: maps title/url/snippet and falls back to content", () => {
