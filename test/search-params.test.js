@@ -4,7 +4,12 @@ import assert from "node:assert/strict";
 import {
   buildBaiduRequestBody,
   mapBaiduReferences,
+  normalizeFreshness,
+  normalizePublishedDate,
+  normalizeSearchCount,
+  normalizeUrlForDedup,
   resolveSiteName,
+  truncateSnippet,
 } from "../lib/search-params.js";
 
 test("buildBaiduRequestBody: minimal body uses web_search_v2 and top_k=count", () => {
@@ -48,7 +53,7 @@ test("buildBaiduRequestBody: freshness maps to top-level search_recency_filter",
   assert.equal(body.search_filter, undefined);
 });
 
-test("buildBaiduRequestBody: date range wins when freshness is absent but both not present", () => {
+test("buildBaiduRequestBody: single-sided date omits the missing bound", () => {
   // freshness and explicit dates are mutually exclusive by the caller; here we
   // verify the date branch does not pick up freshness fields.
   const body = buildBaiduRequestBody({
@@ -59,7 +64,20 @@ test("buildBaiduRequestBody: date range wins when freshness is absent but both n
     excludedSites: [],
   });
   assert.deepEqual(body.search_filter, {
-    range: { page_time: { gte: "2026-03-01", lt: undefined } },
+    range: { page_time: { gte: "2026-03-01" } },
+  });
+});
+
+test("buildBaiduRequestBody: single-sided dateBefore omits gte", () => {
+  const body = buildBaiduRequestBody({
+    query: "q",
+    count: 5,
+    timeFilters: { dateBefore: "2026-03-01" },
+    sites: [],
+    excludedSites: [],
+  });
+  assert.deepEqual(body.search_filter, {
+    range: { page_time: { lt: "2026-03-01" } },
   });
 });
 
@@ -87,6 +105,30 @@ test("buildBaiduRequestBody: site filter combines with a recency filter", () => 
   });
   assert.ok(body.search_filter.match.site.includes("baidu.com"));
   assert.equal(body.search_recency_filter, "month");
+});
+
+test("normalizeFreshness: pd/pw/pm/py map to Baidu recency values", () => {
+  assert.equal(normalizeFreshness("pd"), "day");
+  assert.equal(normalizeFreshness("pw"), "week");
+  assert.equal(normalizeFreshness("pm"), "month");
+  assert.equal(normalizeFreshness("py"), "year");
+  assert.equal(normalizeFreshness("week"), "week");
+  assert.equal(normalizeFreshness("decade"), undefined);
+  assert.equal(normalizeFreshness(undefined), undefined);
+});
+
+test("buildBaiduRequestBody: pd-style freshness maps to search_recency_filter", () => {
+  for (const [input, expected] of [["pd", "day"], ["pw", "week"], ["pm", "month"], ["py", "year"]]) {
+    const body = buildBaiduRequestBody({
+      query: "q",
+      count: 5,
+      timeFilters: { freshness: input },
+      sites: [],
+      excludedSites: [],
+    });
+    assert.equal(body.search_recency_filter, expected, input);
+    assert.equal(body.search_filter, undefined, `${input}: no page_time range`);
+  }
 });
 
 test("mapBaiduReferences: maps title/url/snippet and falls back to content", () => {
@@ -128,4 +170,64 @@ test("resolveSiteName: extracts hostname and tolerates bad urls", () => {
   assert.equal(resolveSiteName("https://www.baidu.com/s?wd=x"), "www.baidu.com");
   assert.equal(resolveSiteName("not-a-url"), undefined);
   assert.equal(resolveSiteName(undefined), undefined);
+});
+
+test("normalizeSearchCount: clamps to 1-10 and falls back on garbage", () => {
+  assert.equal(normalizeSearchCount(5), 5);
+  assert.equal(normalizeSearchCount(0), 1);
+  assert.equal(normalizeSearchCount(99), 10);
+  assert.equal(normalizeSearchCount(4.9), 4);
+  assert.equal(normalizeSearchCount("7"), 7);
+  assert.equal(normalizeSearchCount("abc"), 5);
+  assert.equal(normalizeSearchCount(undefined), 5);
+  assert.equal(normalizeSearchCount(NaN), 5);
+});
+
+test("buildBaiduRequestBody: out-of-range count is clamped into top_k", () => {
+  const body = buildBaiduRequestBody({
+    query: "q",
+    count: 99,
+    timeFilters: {},
+    sites: [],
+    excludedSites: [],
+  });
+  assert.equal(body.resource_type_filter[0].top_k, 10);
+});
+
+test("mapBaiduReferences: dedupes by normalized url keeping first", () => {
+  const results = mapBaiduReferences([
+    { title: "A", url: "https://baidu.com/a", snippet: "one" },
+    { title: "A-dup", url: "https://baidu.com/a#frag", snippet: "two" },
+    { title: "A-slash", url: "https://baidu.com/a/", snippet: "three" },
+    { title: "B", url: "https://baidu.com/b", snippet: "four" },
+  ]);
+  assert.equal(results.length, 2);
+  assert.equal(results[0].title, "A");
+  assert.equal(results[1].url, "https://baidu.com/b");
+});
+
+test("mapBaiduReferences: truncates long snippets", () => {
+  const long = "x".repeat(600);
+  const results = mapBaiduReferences([{ title: "T", url: "https://baidu.com/a", snippet: long }]);
+  assert.ok(results[0].description.length <= 501, `len ${results[0].description.length}`);
+  assert.match(results[0].description, /…$/);
+});
+
+test("normalizePublishedDate: normalizes common formats", () => {
+  assert.equal(normalizePublishedDate("2026-09-01"), "2026-09-01");
+  assert.equal(normalizePublishedDate("2026-9-1"), "2026-09-01");
+  assert.equal(normalizePublishedDate("2026年9月1日"), "2026-09-01");
+  assert.equal(normalizePublishedDate(undefined), undefined);
+  assert.equal(normalizePublishedDate(""), undefined);
+});
+
+test("normalizeUrlForDedup: fragment and trailing slash are ignored", () => {
+  assert.equal(
+    normalizeUrlForDedup("https://baidu.com/a#x"),
+    normalizeUrlForDedup("https://baidu.com/a/"),
+  );
+});
+
+test("truncateSnippet: short text untouched", () => {
+  assert.equal(truncateSnippet("hello"), "hello");
 });

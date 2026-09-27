@@ -33,11 +33,36 @@ import {
 import {
   buildBaiduRequestBody,
   mapBaiduReferences,
+  normalizeSearchCount,
 } from "./lib/search-params.js";
 
 const BAIDU_CREDENTIAL_PATH = "plugins.entries.baidu.config.webSearch.apiKey";
 const BAIDU_SEARCH_ENDPOINT = "https://qianfan.baidubce.com/v2/ai_search/web_search";
 const BAIDU_DOCS_URL = "https://docs.openclaw.ai/tools/web";
+const MAX_QUERY_LENGTH = 500;
+const RETRY_DELAYS_MS = [300, 800];
+
+function isRetryableSearchError(err) {
+  const msg = String(err?.message ?? err ?? "");
+  return /429|502|503|504|timeout|timed out|temporar|econn|etimedout|fetch failed|network/i.test(msg);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function normalizeSiteList(values) {
+  if (!Array.isArray(values)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const v of values) {
+    const norm = String(v ?? "").trim().toLowerCase();
+    if (!norm || seen.has(norm)) continue;
+    seen.add(norm);
+    out.push(norm);
+  }
+  return out;
+}
 
 function resolveBaiduWebSearchPluginConfig(config) {
   if (!isRecord(config)) return;
@@ -126,8 +151,18 @@ export async function executeBaiduSearch(args, searchConfig) {
     };
   }
 
-  const query = readStringParam(args, "query", { required: true });
-  const count = resolveSearchCount(args.count, DEFAULT_SEARCH_COUNT);
+  const rawQuery = readStringParam(args, "query", { required: true });
+  const query = typeof rawQuery === "string" ? rawQuery.trim() : rawQuery;
+  if (!query) {
+    return {
+      error: "empty_query",
+      message: "web_search (baidu): query must be a non-empty string.",
+      docs: BAIDU_DOCS_URL,
+    };
+  }
+  const finalQuery =
+    query.length > MAX_QUERY_LENGTH ? query.slice(0, MAX_QUERY_LENGTH) : query;
+  const count = normalizeSearchCount(resolveSearchCount(args.count, DEFAULT_SEARCH_COUNT));
   const timeFilters = parseWebSearchTimeFilters({
     rawFreshness: args.freshness,
     rawDateAfter: args.date_after,
@@ -142,12 +177,12 @@ export async function executeBaiduSearch(args, searchConfig) {
   });
   if (timeFilters.error) return timeFilters;
 
-  const sites = readStringArrayParam(args, "site") ?? [];
-  const excludedSites = readStringArrayParam(args, "exclude_sites") ?? [];
+  const sites = normalizeSiteList(readStringArrayParam(args, "site") ?? []);
+  const excludedSites = normalizeSiteList(readStringArrayParam(args, "exclude_sites") ?? []);
 
   const cacheKey = buildSearchCacheKey([
     "baidu",
-    query,
+    finalQuery,
     String(count),
     timeFilters.freshness ?? "",
     timeFilters.dateAfter ?? "",
@@ -159,30 +194,45 @@ export async function executeBaiduSearch(args, searchConfig) {
   if (cached) return cached;
 
   const start = Date.now();
-  const body = buildBaiduRequestBody({ query, count, timeFilters, sites, excludedSites });
+  const body = buildBaiduRequestBody({ query: finalQuery, count, timeFilters, sites, excludedSites });
 
-  const data = await withTrustedWebSearchEndpoint(
-    {
-      url: BAIDU_SEARCH_ENDPOINT,
-      timeoutSeconds: resolveSearchTimeoutSeconds(searchConfig),
-      init: {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Appbuilder-From": "openclaw",
-          Authorization: `Bearer ${apiKey}`,
+  let data;
+  let attempt = 0;
+  for (;;) {
+    try {
+      data = await withTrustedWebSearchEndpoint(
+        {
+          url: BAIDU_SEARCH_ENDPOINT,
+          timeoutSeconds: resolveSearchTimeoutSeconds(searchConfig),
+          init: {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Appbuilder-From": "openclaw",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(body),
+          },
         },
-        body: JSON.stringify(body),
-      },
-    },
-    async (response) => {
-      await assertOkOrThrowProviderError(response, "Baidu AI Search error");
-      return readProviderJsonResponse(response, "Baidu AI Search error");
-    },
-  );
+        async (response) => {
+          await assertOkOrThrowProviderError(response, "Baidu AI Search error");
+          return readProviderJsonResponse(response, "Baidu AI Search error");
+        },
+      );
+      break;
+    } catch (err) {
+      if (attempt >= RETRY_DELAYS_MS.length || !isRetryableSearchError(err)) throw err;
+      await sleep(RETRY_DELAYS_MS[attempt]);
+      attempt += 1;
+    }
+  }
 
   if (data && typeof data.code === "number" && data.code !== 0) {
-    throw new Error(`Baidu AI Search error: ${data.message ?? `code ${data.code}`}`);
+    return {
+      error: "baidu_search_error",
+      message: `Baidu AI Search error: ${data.message ?? `code ${data.code}`}`,
+      docs: BAIDU_DOCS_URL,
+    };
   }
 
   const results = mapBaiduReferences(data?.references, (value) =>
@@ -190,7 +240,7 @@ export async function executeBaiduSearch(args, searchConfig) {
   );
 
   const payload = {
-    query,
+    query: finalQuery,
     provider: "baidu",
     count: results.length,
     tookMs: Date.now() - start,

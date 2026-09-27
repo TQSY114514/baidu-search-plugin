@@ -64,19 +64,33 @@ openclaw run "帮我搜一下 xxx"
 
 | 参数 | 说明 | 默认 |
 |---|---|---|
-| `count` | 返回结果条数，1–10 | 5 |
+| `query` | 搜索关键词；首尾空白自动去除，空字符串拒绝（`empty_query`），超 500 字符截断 | 必填 |
+| `count` | 返回结果条数，钳制在 1–10（小数向下取整，非数字回退默认） | 5 |
 | `freshness` | 时效快捷值：`pd`/`pw`/`pm`/`py`（日/周/月/年）或 `day`/`week`/`month`/`year`；不可与日期参数同用 | 无 |
 | `date_after` | 限定结果发布时间之后，`YYYY-MM-DD` | 无 |
 | `date_before` | 限定结果发布时间之前，`YYYY-MM-DD` | 无 |
-| `site` | 站点过滤（如 `site:baidu.com` 风格），字符串或数组 | 无 |
-| `exclude_sites` | 屏蔽站点，字符串或数组 | 无 |
+| `site` | 站点过滤（如 `site:baidu.com` 风格），字符串或数组；自动小写+去重 | 无 |
+| `exclude_sites` | 屏蔽站点，字符串或数组；自动小写+去重 | 无 |
+
+## 结果处理
+
+- **去重**：按归一化 URL 去重（忽略大小写、fragment、尾部斜杠），保留第一条
+- **摘要截断**：单条摘要超 500 字符截断并加 `…`
+- **发布时间归一化**：`YYYY-M-D` 补零、`YYYY年M月D日`、时间戳、可解析日期统一转 `YYYY-MM-DD`，解析不了的保留原文
+
+## 容错
+
+- 瞬时错误（429/502/503/504、超时、网络错误）自动重试最多 2 次（300ms/800ms 退避）；401/403 类直接抛
+- 百度返回 `code != 0` 时返回结构化 `baidu_search_error`，不抛异常中断工具循环
 
 ## 工作原理
 
 - 端点：`POST https://qianfan.baidubce.com/v2/ai_search/web_search`
 - 请求体：`{"messages":[{"role":"user","content":"<query>"}], "search_source":"baidu_search_v2", "resource_type_filter":[{"type":"web","top_k":<count>}]}`
 - 鉴权：`Authorization: Bearer <bce-v3/ALTAK-...>`，附 `X-Appbuilder-From: openclaw`
-- `freshness`/`date_after`/`date_before` 映射为 `search_filter.range.page_time {gte, lt}`，
+- `freshness`（`pd`/`pw`/`pm`/`py` 或 `day`/`week`/`month`/`year`）映射为顶层 `search_recency_filter`
+ （`day`/`week`/`month`/`year`，百度文档值；`page_time` 实测被百度忽略，不用），
+  `date_after`/`date_before` 映射为 `search_filter.range.page_time {gte, lt}`（单边只发有值的一侧），
   `site` 映射为 `search_filter.match.site`，`exclude_sites` 映射为 `block_websites`
 - 响应 `references[]` 映射为标准 `web_search` 结果，自带结果缓存
   （缓存 key 覆盖 query/count/时效/站点等全部维度）
