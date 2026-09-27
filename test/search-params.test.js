@@ -8,6 +8,7 @@ import {
   normalizePublishedDate,
   normalizeSearchCount,
   normalizeUrlForDedup,
+  parseRetryAfterMs,
   resolveSiteName,
   truncateSnippet,
 } from "../lib/search-params.js";
@@ -230,4 +231,22 @@ test("normalizeUrlForDedup: fragment and trailing slash are ignored", () => {
 
 test("truncateSnippet: short text untouched", () => {
   assert.equal(truncateSnippet("hello"), "hello");
+});
+
+test("parseRetryAfterMs: delay seconds convert to ms and clamp", () => {
+  assert.equal(parseRetryAfterMs("120"), 30_000); // clamped to MAX_RETRY_AFTER_MS
+  assert.equal(parseRetryAfterMs("2"), 2000);
+  assert.equal(parseRetryAfterMs("0"), 0);
+});
+
+test("parseRetryAfterMs: HTTP date resolves against now and clamps past to 0", () => {
+  const now = Date.UTC(2026, 8, 27, 12, 0, 0);
+  assert.equal(parseRetryAfterMs("Sat, 27 Sep 2026 12:00:05 GMT", now), 5000);
+  assert.equal(parseRetryAfterMs("Sat, 27 Sep 2026 11:00:00 GMT", now), 0);
+});
+
+test("parseRetryAfterMs: garbage returns undefined", () => {
+  assert.equal(parseRetryAfterMs(undefined), undefined);
+  assert.equal(parseRetryAfterMs(""), undefined);
+  assert.equal(parseRetryAfterMs("soon"), undefined);
 });

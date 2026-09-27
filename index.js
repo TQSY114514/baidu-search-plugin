@@ -34,6 +34,7 @@ import {
   buildBaiduRequestBody,
   mapBaiduReferences,
   normalizeSearchCount,
+  parseRetryAfterMs,
 } from "./lib/search-params.js";
 
 const BAIDU_CREDENTIAL_PATH = "plugins.entries.baidu.config.webSearch.apiKey";
@@ -45,6 +46,27 @@ const RETRY_DELAYS_MS = [300, 800];
 function isRetryableSearchError(err) {
   const msg = String(err?.message ?? err ?? "");
   return /429|502|503|504|timeout|timed out|temporar|econn|etimedout|fetch failed|network/i.test(msg);
+}
+
+// Reads Retry-After from wherever the SDK error carries headers
+// (Headers instance or plain object, top-level or under .response).
+// Returns undefined when absent so the caller falls back to fixed backoff.
+function readRetryAfterMs(err) {
+  const candidates = [err?.headers, err?.response?.headers];
+  for (const headers of candidates) {
+    if (!headers) continue;
+    const value =
+      typeof headers.get === "function"
+        ? headers.get("retry-after")
+        : headers["retry-after"] ?? headers["Retry-After"];
+    const ms = parseRetryAfterMs(value);
+    if (ms !== undefined) return ms;
+  }
+  return;
+}
+
+function resolveRetryDelayMs(err, attempt) {
+  return readRetryAfterMs(err) ?? RETRY_DELAYS_MS[attempt];
 }
 
 function sleep(ms) {
@@ -222,7 +244,7 @@ export async function executeBaiduSearch(args, searchConfig) {
       break;
     } catch (err) {
       if (attempt >= RETRY_DELAYS_MS.length || !isRetryableSearchError(err)) throw err;
-      await sleep(RETRY_DELAYS_MS[attempt]);
+      await sleep(resolveRetryDelayMs(err, attempt));
       attempt += 1;
     }
   }
@@ -230,6 +252,7 @@ export async function executeBaiduSearch(args, searchConfig) {
   if (data && typeof data.code === "number" && data.code !== 0) {
     return {
       error: "baidu_search_error",
+      code: data.code,
       message: `Baidu AI Search error: ${data.message ?? `code ${data.code}`}`,
       docs: BAIDU_DOCS_URL,
     };

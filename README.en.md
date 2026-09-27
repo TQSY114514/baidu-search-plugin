@@ -1,0 +1,100 @@
+# Baidu AI Search Plugin for OpenClaw
+
+A Baidu AI Search provider for OpenClaw `web_search`. Calls the Baidu Qianfan
+`v2/ai_search/web_search` API and returns structured results
+(title, URL, snippet, publish date, site name), with support for result count,
+recency/date-range filters, and site include/exclude lists.
+
+> Existing community Baidu search plugins either target outdated APIs or get
+> flagged by security scans. This plugin is small, fully auditable, and sends
+> your key only to the official Baidu endpoint `https://qianfan.baidubce.com` —
+> never through any third-party proxy.
+
+## Install
+
+```bash
+openclaw plugins install clawhub:@tqsy114514/baidu-search-plugin
+```
+
+## Setup
+
+### 1. Get a Baidu Qianfan AI Search API key
+
+Enable the "Baidu AI Search" service in the
+[Baidu Qianfan console](https://console.bce.baidu.com/qianfan/) and create an
+app to get a `bce-v3/ALTAK-...` key.
+
+### 2. Store it
+
+```bash
+openclaw config set plugins.entries.baidu.config.webSearch.apiKey "bce-v3/ALTAK-..."
+openclaw config set tools.web.search.provider baidu
+openclaw gateway restart
+```
+
+`BAIDU_API_KEY` (falling back to `QIANFAN_API_KEY`) is also supported.
+
+#### Recommended: SecretRef instead of a plaintext key
+
+```bash
+openclaw secret set baidu_api_key "bce-v3/ALTAK-..."
+openclaw config set plugins.entries.baidu.config.webSearch.apiKey "secretRef:baidu_api_key"
+openclaw gateway restart
+```
+
+The apiKey field is marked `sensitive: true` in uiHints, so host UIs mask it.
+
+### 3. Use it
+
+```bash
+openclaw run "search for xxx"
+```
+
+Or call the `web_search` tool in any session; the provider shows up as `baidu`.
+
+## Search parameters
+
+Besides `query`, `web_search` accepts these optional parameters (exposed via the tool schema):
+
+| Parameter | Description | Default |
+|---|---|---|
+| `query` | Keywords; trimmed, empty strings rejected (`empty_query`), truncated past 500 chars | required |
+| `count` | Result count, clamped to 1–10 (floats floored, non-numeric falls back) | 5 |
+| `freshness` | Recency shortcut: `pd`/`pw`/`pm`/`py` (day/week/month/year) or `day`/`week`/`month`/`year`; mutually exclusive with date params | none |
+| `date_after` | Only results published after this, `YYYY-MM-DD` | none |
+| `date_before` | Only results published before this, `YYYY-MM-DD` | none |
+| `site` | Restrict to sites (e.g. `site:baidu.com` style), string or array; lowercased + deduped | none |
+| `exclude_sites` | Block these sites, string or array; lowercased + deduped | none |
+
+## Result handling
+
+- **Dedup**: results are deduped by normalized URL (case, fragment, trailing slash ignored), first wins
+- **Snippet cap**: descriptions longer than 500 chars are truncated with `…`
+- **Date normalization**: `YYYY-M-D` zero-padded, `YYYY年M月D日`, timestamps and parseable dates unified to `YYYY-MM-DD`; unparseable values kept as-is
+
+## Fault tolerance
+
+- Transient failures (429/502/503/504, timeouts, network errors) are retried up to 2 times (300ms/800ms backoff; honors `Retry-After` on 429, capped at 30s); 401/403-style errors throw immediately
+- A Baidu `code != 0` response returns a structured `baidu_search_error` (with a `code` field so callers can branch on it) instead of throwing into the tool loop
+
+## How it works
+
+- Endpoint: `POST https://qianfan.baidubce.com/v2/ai_search/web_search`
+- Body: `{"messages":[{"role":"user","content":"<query>"}], "search_source":"baidu_search_v2", "resource_type_filter":[{"type":"web","top_k":<count>}]}` (+ optional filters)
+- Auth: `Authorization: Bearer <bce-v3/ALTAK-...>` with `X-Appbuilder-From: openclaw`
+- `freshness` maps to top-level `search_recency_filter` (`day`/`week`/`month`/`year`;
+  `page_time` is ignored by Baidu, so it is not used), `date_after`/`date_before`
+  map to `search_filter.range.page_time {gte, lt}` (single-sided when only one bound),
+  `site` to `search_filter.match.site`, `exclude_sites` to `block_websites`
+- `references[]` map to standard `web_search` results with result caching
+  (cache key covers query/count/recency/sites and every other dimension)
+
+## Security
+
+- Reuses the OpenClaw SDK's `withTrustedWebSearchEndpoint` (SSRF protection),
+  search-result caching, and external-content wrapping (untrusted marking)
+- The plugin ships no credentials; the key comes from config (SecretRef supported) or env vars
+
+## License
+
+MIT
