@@ -32,9 +32,13 @@ import {
 } from "openclaw/plugin-sdk/provider-web-search";
 import {
   buildBaiduRequestBody,
+  isRetryableHttpStatus,
   mapBaiduReferences,
   normalizeSearchCount,
   parseRetryAfterMs,
+  readErrorStatus,
+  resolveBaiduErrorCode,
+  truncateByCodePoints,
 } from "./lib/search-params.js";
 
 const BAIDU_CREDENTIAL_PATH = "plugins.entries.baidu.config.webSearch.apiKey";
@@ -44,6 +48,10 @@ const MAX_QUERY_LENGTH = 500;
 const RETRY_DELAYS_MS = [300, 800];
 
 function isRetryableSearchError(err) {
+  // Prefer a numeric status when the SDK error carries one; message sniffing
+  // is only a fallback (fragile across SDK/host locales, e.g. "4290" matches "429").
+  const status = readErrorStatus(err);
+  if (status !== undefined) return isRetryableHttpStatus(status);
   const msg = String(err?.message ?? err ?? "");
   return /429|502|503|504|timeout|timed out|temporar|econn|etimedout|fetch failed|network/i.test(msg);
 }
@@ -147,13 +155,11 @@ const BaiduSearchSchema = {
       description: "截止日期（YYYY-MM-DD），与 date_after 搭配构成时间范围，不可与 freshness 同时使用",
     },
     site: {
-      type: "array",
-      items: { type: "string" },
+      anyOf: [{ type: "array", items: { type: "string" } }, { type: "string" }],
       description: "限定在此站点内搜索，如 [\"baidu.com\"]（也接受单个字符串）",
     },
     exclude_sites: {
-      type: "array",
-      items: { type: "string" },
+      anyOf: [{ type: "array", items: { type: "string" } }, { type: "string" }],
       description: "屏蔽这些站点，如 [\"tieba.baidu.com\"]（也接受单个字符串）",
     },
   },
@@ -182,8 +188,7 @@ export async function executeBaiduSearch(args, searchConfig) {
       docs: BAIDU_DOCS_URL,
     };
   }
-  const finalQuery =
-    query.length > MAX_QUERY_LENGTH ? query.slice(0, MAX_QUERY_LENGTH) : query;
+  const finalQuery = truncateByCodePoints(query, MAX_QUERY_LENGTH);
   const count = normalizeSearchCount(resolveSearchCount(args.count, DEFAULT_SEARCH_COUNT));
   const timeFilters = parseWebSearchTimeFilters({
     rawFreshness: args.freshness,
@@ -249,11 +254,12 @@ export async function executeBaiduSearch(args, searchConfig) {
     }
   }
 
-  if (data && typeof data.code === "number" && data.code !== 0) {
+  const baiduErrorCode = resolveBaiduErrorCode(data);
+  if (baiduErrorCode !== undefined && baiduErrorCode !== 0) {
     return {
       error: "baidu_search_error",
-      code: data.code,
-      message: `Baidu AI Search error: ${data.message ?? `code ${data.code}`}`,
+      code: baiduErrorCode,
+      message: `Baidu AI Search error: ${data.message ?? `code ${baiduErrorCode}`}`,
       docs: BAIDU_DOCS_URL,
     };
   }

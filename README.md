@@ -1,5 +1,7 @@
 # Baidu AI Search Plugin for OpenClaw
 
+[English](README.en.md) | 中文
+
 ![ClawHub downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FTQSY114514%2Fbaidu-search-plugin%2Fmaster%2Fdownloads.json&query=latest&label=ClawHub%20downloads&color=success&style=for-the-badge)
 
 <img src="chart.svg" alt="ClawHub downloads trend" width="720">
@@ -80,7 +82,7 @@ openclaw run "帮我搜一下 xxx"
 
 ## 容错
 
-- 瞬时错误（429/502/503/504、超时、网络错误）自动重试最多 2 次（300ms/800ms 退避；429 有 `Retry-After` 头时按头等待，上限 30s）；401/403 类直接抛
+- 瞬时错误（429/502/503/504、超时、网络错误）自动重试最多 2 次（300ms/800ms 退避；429 有 `Retry-After` 头时按头等待，上限 10s，避免长时间 sleep 拖爆宿主工具调用超时）；401/403 类直接抛
 - 百度返回 `code != 0` 时返回结构化 `baidu_search_error`（带 `code` 字段供调用方按码降级），不抛异常中断工具循环
 
 ## 工作原理

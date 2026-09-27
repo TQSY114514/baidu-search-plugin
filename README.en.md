@@ -1,5 +1,14 @@
 # Baidu AI Search Plugin for OpenClaw
 
+[中文](README.md) | English
+
+![ClawHub downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FTQSY114514%2Fbaidu-search-plugin%2Fmaster%2Fdownloads.json&query=latest&label=ClawHub%20downloads&color=success&style=for-the-badge)
+
+<img src="chart.svg" alt="ClawHub downloads trend" width="720">
+
+> The trend chart is redrawn daily by GitHub Actions fetching the ClawHub API
+> (see `.github/workflows/track-downloads.yml`); history lives in [`downloads.json`](downloads.json).
+
 A Baidu AI Search provider for OpenClaw `web_search`. Calls the Baidu Qianfan
 `v2/ai_search/web_search` API and returns structured results
 (title, URL, snippet, publish date, site name), with support for result count,
@@ -74,7 +83,7 @@ Besides `query`, `web_search` accepts these optional parameters (exposed via the
 
 ## Fault tolerance
 
-- Transient failures (429/502/503/504, timeouts, network errors) are retried up to 2 times (300ms/800ms backoff; honors `Retry-After` on 429, capped at 30s); 401/403-style errors throw immediately
+- Transient failures (429/502/503/504, timeouts, network errors) are retried up to 2 times (300ms/800ms backoff; honors `Retry-After` on 429, capped at 10s so a long sleep can't blow past the host tool-call timeout); 401/403-style errors throw immediately
 - A Baidu `code != 0` response returns a structured `baidu_search_error` (with a `code` field so callers can branch on it) instead of throwing into the tool loop
 
 ## How it works

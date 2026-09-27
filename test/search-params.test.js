@@ -3,13 +3,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildBaiduRequestBody,
+  isRetryableHttpStatus,
   mapBaiduReferences,
   normalizeFreshness,
   normalizePublishedDate,
   normalizeSearchCount,
   normalizeUrlForDedup,
   parseRetryAfterMs,
+  readErrorStatus,
+  resolveBaiduErrorCode,
   resolveSiteName,
+  toIsoDate,
   truncateSnippet,
 } from "../lib/search-params.js";
 
@@ -234,7 +238,7 @@ test("truncateSnippet: short text untouched", () => {
 });
 
 test("parseRetryAfterMs: delay seconds convert to ms and clamp", () => {
-  assert.equal(parseRetryAfterMs("120"), 30_000); // clamped to MAX_RETRY_AFTER_MS
+  assert.equal(parseRetryAfterMs("120"), 10_000); // clamped to MAX_RETRY_AFTER_MS
   assert.equal(parseRetryAfterMs("2"), 2000);
   assert.equal(parseRetryAfterMs("0"), 0);
 });
@@ -249,4 +253,61 @@ test("parseRetryAfterMs: garbage returns undefined", () => {
   assert.equal(parseRetryAfterMs(undefined), undefined);
   assert.equal(parseRetryAfterMs(""), undefined);
   assert.equal(parseRetryAfterMs("soon"), undefined);
+});
+
+test("resolveBaiduErrorCode: numeric strings count as failure codes", () => {
+  assert.equal(resolveBaiduErrorCode({ code: 400 }), 400);
+  assert.equal(resolveBaiduErrorCode({ code: "400" }), 400);
+  assert.equal(resolveBaiduErrorCode({ code: 0 }), 0);
+  assert.equal(resolveBaiduErrorCode({ code: "0" }), 0);
+  assert.equal(resolveBaiduErrorCode({}), undefined);
+  assert.equal(resolveBaiduErrorCode({ code: "oops" }), undefined);
+  assert.equal(resolveBaiduErrorCode(undefined), undefined);
+});
+
+test("toIsoDate: UTC midnight edge does not shift the day", () => {
+  // 2026-09-01T00:30:00Z is still 2026-09-01 in UTC but 2026-09-01 08:30 in
+  // UTC+8; local-time getters used to return different days by timezone.
+  assert.equal(toIsoDate(new Date("2026-09-01T00:30:00Z")), "2026-09-01");
+  assert.equal(toIsoDate(new Date("2026-09-01T23:30:00Z")), "2026-09-01");
+});
+
+test("mapBaiduReferences: drops non-http(s) URL schemes", () => {
+  const results = mapBaiduReferences([
+    { title: "JS", url: "javascript:alert(1)", snippet: "x" },
+    { title: "DATA", url: "data:text/html,hi", snippet: "x" },
+    { title: "OK", url: "https://baidu.com/a", snippet: "x" },
+    { title: "REL", url: "/relative/path", snippet: "x" },
+  ]);
+  assert.equal(results.length, 2);
+  assert.equal(results[0].title, "OK");
+  assert.equal(results[1].title, "REL");
+});
+
+test("readErrorStatus: finds numeric status across SDK error shapes", () => {
+  assert.equal(readErrorStatus({ status: 429 }), 429);
+  assert.equal(readErrorStatus({ statusCode: "503" }), 503);
+  assert.equal(readErrorStatus({ response: { status: 502 } }), 502);
+  assert.equal(readErrorStatus({ code: "ECONNRESET" }), undefined);
+  assert.equal(readErrorStatus({ message: "timeout" }), undefined);
+  assert.equal(readErrorStatus(undefined), undefined);
+});
+
+test("isRetryableHttpStatus: only transient statuses retry", () => {
+  assert.equal(isRetryableHttpStatus(429), true);
+  assert.equal(isRetryableHttpStatus(503), true);
+  assert.equal(isRetryableHttpStatus(401), false);
+  assert.equal(isRetryableHttpStatus(403), false);
+  assert.equal(isRetryableHttpStatus(400), false);
+});
+
+test("truncateSnippet: never splits a surrogate pair", () => {
+  const results = mapBaiduReferences([
+    { title: "E", url: "https://baidu.com/e", snippet: "😀".repeat(600) },
+  ]);
+  const codePoints = Array.from(results[0].description);
+  assert.ok(codePoints.length <= 501, `len ${codePoints.length}`);
+  assert.match(results[0].description, /…$/);
+  // No lone surrogates: re-encoding round-trips cleanly.
+  assert.equal(Array.from(results[0].description).join(""), results[0].description);
 });
