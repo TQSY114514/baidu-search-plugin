@@ -108,7 +108,7 @@ test("buildBaiduRequestBody: site filter combines with a recency filter", () => 
     sites: ["baidu.com"],
     excludedSites: [],
   });
-  assert.ok(body.search_filter.match.site.includes("baidu.com"));
+  assert.deepEqual(body.search_filter.match.site, ["baidu.com"]);
   assert.equal(body.search_recency_filter, "month");
 });
 
