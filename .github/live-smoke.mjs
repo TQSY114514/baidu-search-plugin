@@ -1,6 +1,6 @@
 // Live smoke test against the real Baidu API (replaces calibrate.mjs).
 // Uses the plugin's own request builder / result mapper, so it verifies that
-// Baidu accepts exactly the bodies the plugin sends. 3 calls per run.
+// Baidu accepts exactly the bodies the plugin sends. 4 calls per run.
 //
 //   BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs
 //
@@ -24,6 +24,15 @@ if (!apiKey) {
 
 const daysAgo = (n) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 
+// A few undated pages are tolerated, but most dated results must respect the
+// range, otherwise Baidu is silently ignoring the page_time filter.
+function checkDateRange(results, { dateAfter = "0000-00-00", dateBefore = "9999-99-99" }) {
+  const dated = results.filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.published ?? ""));
+  const inRange = dated.filter((r) => r.published >= dateAfter && r.published <= dateBefore);
+  console.log(`  dated ${dated.length}/${results.length}, in range ${inRange.length}/${dated.length}`);
+  return dated.length === 0 || inRange.length * 2 >= dated.length || "page_time range looks ignored";
+}
+
 const cases = [
   {
     name: "site filter",
@@ -34,14 +43,14 @@ const cases = [
   {
     name: "one-sided date_after",
     params: { query: "人工智能 新闻", count: 5, timeFilters: { dateAfter: daysAgo(30) } },
-    // Report-only: a few undated/older pages are tolerated, but most results
-    // must respect the range or the page_time filter is being ignored.
-    check: (results, { dateAfter }) => {
-      const dated = results.filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.published ?? ""));
-      const inRange = dated.filter((r) => r.published >= dateAfter);
-      console.log(`  dated ${dated.length}/${results.length}, in range ${inRange.length}/${dated.length}`);
-      return dated.length === 0 || inRange.length * 2 >= dated.length || "page_time range looks ignored";
-    },
+    check: (results, f) => checkDateRange(results, f),
+  },
+  {
+    // An evergreen query whose unfiltered results are mostly recent pages,
+    // so an ignored range is visible.
+    name: "one-sided date_before",
+    params: { query: "李白 静夜思 赏析", count: 5, timeFilters: { dateBefore: "2020-12-31" } },
+    check: (results, f) => checkDateRange(results, f),
   },
   {
     name: "long query (enable_rewrite)",

@@ -111,7 +111,7 @@ openclaw config set tools.web.search.cacheTtlMinutes 60
 - Auth: `Authorization: Bearer <bce-v3/ALTAK-...>` with `X-Appbuilder-From: openclaw`
 - `freshness` maps to top-level `search_recency_filter` (`day`/`week`/`month`/`year`;
   `page_time` is ignored by Baidu, so it is not used), `date_after`/`date_before`
-  map to `search_filter.range.page_time {gte, lte}` (both inclusive; Baidu requires both bounds, so a missing one is filled with `1970-01-01` / `now/d`),
+  map to `search_filter.range.page_time {gte, lte}` (both inclusive; Baidu requires both bounds, so a missing one is filled with `2000-01-01` / `2099-12-31`; live-tested: Baidu rejects mixing absolute dates with `now/d` and ignores a `1970-01-01` lower bound),
   `site` to `search_filter.match.site`, `exclude_sites` to `block_websites`
 - `references[]` map to standard `web_search` results with result caching
   (cache key covers query/count/recency/sites and every other dimension)
@@ -127,7 +127,7 @@ openclaw config set tools.web.search.cacheTtlMinutes 60
 ```bash
 npm test            # unit tests + index.js behavior tests (SDK stand-in in test/fixtures; no openclaw install needed)
 npm run typecheck   # JSDoc type check of lib/ (TypeScript checkJs)
-BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # live API smoke test, 3 calls
+BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # live API smoke test, 4 calls
 ```
 
 - CI: the `test` workflow runs tests on Node 22/24/26 plus the type check

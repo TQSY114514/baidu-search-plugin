@@ -64,7 +64,7 @@ test("buildBaiduRequestBody: freshness maps to top-level search_recency_filter",
   assert.equal(body.search_filter, undefined);
 });
 
-test("buildBaiduRequestBody: dateAfter alone gets an upper bound of today", () => {
+test("buildBaiduRequestBody: dateAfter alone gets an absolute far-future upper bound", () => {
   // freshness and explicit dates are mutually exclusive by the caller; here we
   // verify the date branch does not pick up freshness fields.
   const body = buildBaiduRequestBody({
@@ -75,11 +75,11 @@ test("buildBaiduRequestBody: dateAfter alone gets an upper bound of today", () =
     excludedSites: [],
   });
   assert.deepEqual(body.search_filter, {
-    range: { page_time: { gte: "2026-03-01", lte: "now/d" } },
+    range: { page_time: { gte: "2026-03-01", lte: "2099-12-31" } },
   });
 });
 
-test("buildBaiduRequestBody: dateBefore alone gets an epoch lower bound", () => {
+test("buildBaiduRequestBody: dateBefore alone gets a 2000-01-01 lower bound (not epoch 0)", () => {
   const body = buildBaiduRequestBody({
     query: "q",
     count: 5,
@@ -88,7 +88,7 @@ test("buildBaiduRequestBody: dateBefore alone gets an epoch lower bound", () => 
     excludedSites: [],
   });
   assert.deepEqual(body.search_filter, {
-    range: { page_time: { gte: "1970-01-01", lte: "2026-03-01" } },
+    range: { page_time: { gte: "2000-01-01", lte: "2026-03-01" } },
   });
 });
 

@@ -2,7 +2,7 @@ name: Baidu live smoke
 
 on:
   schedule:
-    # 每天 01:00 UTC = 北京时间 09:00；每次 3 次调用，约占免费额度 6%/月
+    # 每天 01:00 UTC = 北京时间 09:00；每次 4 次调用，约占免费额度 8%/月
     - cron: '0 1 * * *'
   push:
     branches: [master]

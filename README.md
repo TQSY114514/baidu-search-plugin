@@ -110,7 +110,7 @@ openclaw config set tools.web.search.cacheTtlMinutes 60
 - 鉴权：`Authorization: Bearer <bce-v3/ALTAK-...>`，附 `X-Appbuilder-From: openclaw`
 - `freshness`（`pd`/`pw`/`pm`/`py` 或 `day`/`week`/`month`/`year`）映射为顶层 `search_recency_filter`
  （`day`/`week`/`month`/`year`，百度文档值；`page_time` 实测被百度忽略，不用），
-  `date_after`/`date_before` 映射为 `search_filter.range.page_time {gte, lte}`（两端都包含；百度要求两端同时存在，只给一侧时另一侧补 `1970-01-01` / `now/d`），
+  `date_after`/`date_before` 映射为 `search_filter.range.page_time {gte, lte}`（两端都包含；百度要求两端同时存在，只给一侧时另一侧补 `2000-01-01` / `2099-12-31`；实测百度不接受具体日期与 `now/d` 混用，且会忽略 `1970-01-01` 下界），
   `site` 映射为 `search_filter.match.site`，`exclude_sites` 映射为 `block_websites`
 - 响应 `references[]` 映射为标准 `web_search` 结果，自带结果缓存
   （缓存 key 覆盖 query/count/时效/站点等全部维度）
@@ -126,7 +126,7 @@ openclaw config set tools.web.search.cacheTtlMinutes 60
 ```bash
 npm test            # 单元测试 + index.js 行为测试（用 test/fixtures 里的 SDK 替身，不需要安装 openclaw）
 npm run typecheck   # 对 lib/ 做 JSDoc 类型检查（TypeScript checkJs）
-BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # 真实接口冒烟测试，3 次调用
+BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # 真实接口冒烟测试，4 次调用
 ```
 
 - CI：`test` workflow 在 Node 22/24/26 上跑测试并做类型检查
