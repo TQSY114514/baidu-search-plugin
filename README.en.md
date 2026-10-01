@@ -71,19 +71,19 @@ Besides `query`, `web_search` accepts these optional parameters (exposed via the
 | `count` | Result count, clamped to 1–10 (floats floored, non-numeric falls back) | 5 |
 | `freshness` | Recency shortcut: `pd`/`pw`/`pm`/`py` (day/week/month/year) or `day`/`week`/`month`/`year`; mutually exclusive with date params | none |
 | `date_after` | Only results published after this, `YYYY-MM-DD` | none |
-| `date_before` | Only results published before this, `YYYY-MM-DD` | none |
-| `site` | Restrict to sites (e.g. `site:baidu.com` style), string or array; lowercased + deduped | none |
-| `exclude_sites` | Block these sites, string or array; lowercased + deduped | none |
+| `date_before` | Only results published on or before this date, `YYYY-MM-DD` | none |
+| `site` | Restrict to sites (e.g. `site:baidu.com` style), string or array; normalized to bare lowercase hosts (strips `site:`, scheme and path) + deduped | none |
+| `exclude_sites` | Block these sites, string or array; normalized like `site` | none |
 
 ## Result handling
 
 - **Dedup**: results are deduped by normalized URL (case, fragment, trailing slash ignored), first wins
 - **Snippet cap**: descriptions longer than 500 chars are truncated with `…`
-- **Date normalization**: `YYYY-M-D` zero-padded, `YYYY年M月D日`, timestamps and parseable dates unified to `YYYY-MM-DD`; unparseable values kept as-is
+- **Date normalization**: `YYYY-M-D`/`YYYY/M/D` zero-padded, `YYYY年M月D日`, timestamps and parseable dates unified to `YYYY-MM-DD` (instants use the Beijing calendar day, independent of host timezone); unparseable values kept as-is
 
 ## Fault tolerance
 
-- Transient failures (429/502/503/504, timeouts, network errors) are retried up to 2 times (300ms/800ms backoff; honors `Retry-After` on 429, capped at 10s so a long sleep can't blow past the host tool-call timeout); 401/403-style errors throw immediately
+- Transient failures (429/502/503/504, timeouts, network errors) are retried up to 2 times (300ms/800ms backoff; honors `Retry-After` on 429, capped at 10s so a long sleep can't blow past the host tool-call timeout); 401/403-style errors throw immediately; a cancelled tool call aborts the request and any retry wait
 - A Baidu `code != 0` response returns a structured `baidu_search_error` (with a `code` field so callers can branch on it) instead of throwing into the tool loop
 
 ## How it works
@@ -93,7 +93,7 @@ Besides `query`, `web_search` accepts these optional parameters (exposed via the
 - Auth: `Authorization: Bearer <bce-v3/ALTAK-...>` with `X-Appbuilder-From: openclaw`
 - `freshness` maps to top-level `search_recency_filter` (`day`/`week`/`month`/`year`;
   `page_time` is ignored by Baidu, so it is not used), `date_after`/`date_before`
-  map to `search_filter.range.page_time {gte, lt}` (single-sided when only one bound),
+  map to `search_filter.range.page_time {gte, lte}` (both inclusive) (single-sided when only one bound),
   `site` to `search_filter.match.site`, `exclude_sites` to `block_websites`
 - `references[]` map to standard `web_search` results with result caching
   (cache key covers query/count/recency/sites and every other dimension)

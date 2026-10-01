@@ -32,11 +32,11 @@ import {
 } from "openclaw/plugin-sdk/provider-web-search";
 import {
   buildBaiduRequestBody,
-  isRetryableHttpStatus,
+  isRetryableSearchError,
   mapBaiduReferences,
   normalizeSearchCount,
-  parseRetryAfterMs,
-  readErrorStatus,
+  normalizeSiteList,
+  readRetryAfterMs,
   resolveBaiduErrorCode,
   truncateByCodePoints,
 } from "./lib/search-params.js";
@@ -47,51 +47,20 @@ const BAIDU_DOCS_URL = "https://docs.openclaw.ai/tools/web";
 const MAX_QUERY_LENGTH = 500;
 const RETRY_DELAYS_MS = [300, 800];
 
-function isRetryableSearchError(err) {
-  // Prefer a numeric status when the SDK error carries one; message sniffing
-  // is only a fallback (fragile across SDK/host locales, e.g. "4290" matches "429").
-  const status = readErrorStatus(err);
-  if (status !== undefined) return isRetryableHttpStatus(status);
-  const msg = String(err?.message ?? err ?? "");
-  return /429|502|503|504|timeout|timed out|temporar|econn|etimedout|fetch failed|network/i.test(msg);
-}
-
-// Reads Retry-After from wherever the SDK error carries headers
-// (Headers instance or plain object, top-level or under .response).
-// Returns undefined when absent so the caller falls back to fixed backoff.
-function readRetryAfterMs(err) {
-  const candidates = [err?.headers, err?.response?.headers];
-  for (const headers of candidates) {
-    if (!headers) continue;
-    const value =
-      typeof headers.get === "function"
-        ? headers.get("retry-after")
-        : headers["retry-after"] ?? headers["Retry-After"];
-    const ms = parseRetryAfterMs(value);
-    if (ms !== undefined) return ms;
-  }
-  return;
-}
-
-function resolveRetryDelayMs(err, attempt) {
-  return readRetryAfterMs(err) ?? RETRY_DELAYS_MS[attempt];
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function normalizeSiteList(values) {
-  if (!Array.isArray(values)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const v of values) {
-    const norm = String(v ?? "").trim().toLowerCase();
-    if (!norm || seen.has(norm)) continue;
-    seen.add(norm);
-    out.push(norm);
-  }
-  return out;
+// Sleeps for the backoff delay, waking early (and throwing) on cancellation.
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    signal?.throwIfAborted();
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function resolveBaiduWebSearchPluginConfig(config) {
@@ -138,11 +107,14 @@ const BaiduSearchSchema = {
       description: "搜索关键词",
     },
     count: {
-      type: "number",
+      type: "integer",
+      minimum: 1,
+      maximum: 10,
       description: "返回结果条数（1-10，默认 5）",
     },
     freshness: {
       type: "string",
+      enum: ["pd", "pw", "pm", "py", "day", "week", "month", "year"],
       description:
         "时效过滤：pd（近一天）/ pw（近一周）/ pm（近一月）/ py（近一年），或 day/week/month/year，不可与 date_after/date_before 同时使用",
     },
@@ -166,7 +138,7 @@ const BaiduSearchSchema = {
   required: ["query"],
 };
 
-export async function executeBaiduSearch(args, searchConfig) {
+export async function executeBaiduSearch(args, searchConfig, signal) {
   const apiKey =
     readConfiguredSecretString(searchConfig?.apiKey, "tools.web.search.apiKey") ??
     readProviderEnvValue(["BAIDU_API_KEY", "QIANFAN_API_KEY"]);
@@ -231,6 +203,7 @@ export async function executeBaiduSearch(args, searchConfig) {
         {
           url: BAIDU_SEARCH_ENDPOINT,
           timeoutSeconds: resolveSearchTimeoutSeconds(searchConfig),
+          signal,
           init: {
             method: "POST",
             headers: {
@@ -248,8 +221,11 @@ export async function executeBaiduSearch(args, searchConfig) {
       );
       break;
     } catch (err) {
-      if (attempt >= RETRY_DELAYS_MS.length || !isRetryableSearchError(err)) throw err;
-      await sleep(resolveRetryDelayMs(err, attempt));
+      // A cancelled tool call must not be retried.
+      if (signal?.aborted || attempt >= RETRY_DELAYS_MS.length || !isRetryableSearchError(err)) {
+        throw err;
+      }
+      await sleep(readRetryAfterMs(err) ?? RETRY_DELAYS_MS[attempt], signal);
       attempt += 1;
     }
   }
@@ -285,12 +261,13 @@ export async function executeBaiduSearch(args, searchConfig) {
   return payload;
 }
 
-function createBaiduToolDefinition(searchConfig, config) {
+function createBaiduToolDefinition(searchConfig) {
   return {
     description:
       "使用百度AI搜索进行中文网络搜索，返回结构化结果（标题、链接、摘要、发布时间）。支持结果条数、时效/日期范围、站点限定与屏蔽。",
     parameters: BaiduSearchSchema,
-    execute: async (args) => executeBaiduSearch(args, searchConfig),
+    execute: async (args, executionContext) =>
+      executeBaiduSearch(args, searchConfig, executionContext?.signal),
   };
 }
 
@@ -309,7 +286,6 @@ export default definePluginEntry({
             resolveProviderWebSearchPluginConfig(ctx.config, "baidu"),
             { mirrorApiKeyToTopLevel: true },
           ),
-          ctx.config,
         ),
     });
   },

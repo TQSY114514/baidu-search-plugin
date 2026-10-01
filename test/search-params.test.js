@@ -4,13 +4,16 @@ import assert from "node:assert/strict";
 import {
   buildBaiduRequestBody,
   isRetryableHttpStatus,
+  isRetryableSearchError,
   mapBaiduReferences,
   normalizeFreshness,
   normalizePublishedDate,
   normalizeSearchCount,
+  normalizeSiteList,
   normalizeUrlForDedup,
   parseRetryAfterMs,
   readErrorStatus,
+  readRetryAfterMs,
   resolveBaiduErrorCode,
   resolveSiteName,
   toIsoDate,
@@ -41,7 +44,7 @@ test("buildBaiduRequestBody: date range maps to search_filter.range.page_time", 
     excludedSites: [],
   });
   assert.deepEqual(body.search_filter, {
-    range: { page_time: { gte: "2026-01-01", lt: "2026-02-01" } },
+    range: { page_time: { gte: "2026-01-01", lte: "2026-02-01" } },
   });
 });
 
@@ -82,7 +85,7 @@ test("buildBaiduRequestBody: single-sided dateBefore omits gte", () => {
     excludedSites: [],
   });
   assert.deepEqual(body.search_filter, {
-    range: { page_time: { lt: "2026-03-01" } },
+    range: { page_time: { lte: "2026-03-01" } },
   });
 });
 
@@ -310,4 +313,50 @@ test("truncateSnippet: never splits a surrogate pair", () => {
   assert.match(results[0].description, /…$/);
   // No lone surrogates: re-encoding round-trips cleanly.
   assert.equal(Array.from(results[0].description).join(""), results[0].description);
+});
+test("buildBaiduRequestBody: same-day range is inclusive, not empty", () => {
+  const body = buildBaiduRequestBody({
+    query: "q",
+    count: 5,
+    timeFilters: { dateAfter: "2026-09-01", dateBefore: "2026-09-01" },
+  });
+  assert.deepEqual(body.search_filter.range.page_time, { gte: "2026-09-01", lte: "2026-09-01" });
+});
+
+test("normalizePublishedDate: slash/dot dates and instants use the Beijing calendar day", () => {
+  assert.equal(normalizePublishedDate("2026/9/1"), "2026-09-01");
+  assert.equal(normalizePublishedDate("2026.09.01"), "2026-09-01");
+  // 2026-09-01 00:00 Beijing == 2026-08-31T16:00Z
+  assert.equal(normalizePublishedDate(1788192000), "2026-09-01");
+  assert.equal(normalizePublishedDate(1788192000000), "2026-09-01");
+  assert.equal(normalizePublishedDate("2026-08-31T16:00:00Z"), "2026-08-31"); // ISO prefix kept as written
+  assert.equal(normalizePublishedDate("Tue, 01 Sep 2026 02:00:00 GMT"), "2026-09-01");
+  assert.equal(normalizePublishedDate("3天前"), "3天前");
+});
+
+test("normalizeSiteList: reduces values to bare deduped hosts", () => {
+  assert.deepEqual(
+    normalizeSiteList([" Baidu.com ", "site:baidu.com", "https://BAIDU.com/x?y", "baidu.com/", "github.com.", "", null]),
+    ["baidu.com", "github.com"],
+  );
+  assert.deepEqual(normalizeSiteList(undefined), []);
+});
+
+test("readRetryAfterMs: reads the SDK's retryAfterMs, then raw headers, and clamps", () => {
+  assert.equal(readRetryAfterMs({ status: 429, retryAfterMs: 2000 }), 2000);
+  assert.equal(readRetryAfterMs({ status: 429, retryAfterMs: 60_000 }), 10_000);
+  assert.equal(readRetryAfterMs({ headers: new Headers({ "Retry-After": "3" }) }), 3000);
+  assert.equal(readRetryAfterMs({ response: { headers: { "retry-after": "1" } } }), 1000);
+  assert.equal(readRetryAfterMs({ status: 429, retryAfterMs: undefined }), undefined);
+  assert.equal(readRetryAfterMs(undefined), undefined);
+});
+
+test("isRetryableSearchError: status wins over message; message is the fallback", () => {
+  assert.equal(isRetryableSearchError({ status: 429 }), true);
+  assert.equal(isRetryableSearchError({ status: 401, message: "timeout" }), false);
+  const timeout = new Error("request timed out");
+  timeout.name = "TimeoutError";
+  assert.equal(isRetryableSearchError(timeout), true);
+  assert.equal(isRetryableSearchError(new TypeError("fetch failed")), true);
+  assert.equal(isRetryableSearchError(new Error("malformed JSON response")), false);
 });
