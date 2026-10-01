@@ -2,6 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  baiduQueryLength,
   buildBaiduRequestBody,
   isRetryableHttpStatus,
   isRetryableSearchError,
@@ -14,6 +15,7 @@ import {
   parseRetryAfterMs,
   readErrorStatus,
   readRetryAfterMs,
+  stripControlChars,
   resolveBaiduErrorCode,
   resolveSiteName,
   toIsoDate,
@@ -61,7 +63,7 @@ test("buildBaiduRequestBody: freshness maps to top-level search_recency_filter",
   assert.equal(body.search_filter, undefined);
 });
 
-test("buildBaiduRequestBody: single-sided date omits the missing bound", () => {
+test("buildBaiduRequestBody: dateAfter alone gets an upper bound of today", () => {
   // freshness and explicit dates are mutually exclusive by the caller; here we
   // verify the date branch does not pick up freshness fields.
   const body = buildBaiduRequestBody({
@@ -72,11 +74,11 @@ test("buildBaiduRequestBody: single-sided date omits the missing bound", () => {
     excludedSites: [],
   });
   assert.deepEqual(body.search_filter, {
-    range: { page_time: { gte: "2026-03-01" } },
+    range: { page_time: { gte: "2026-03-01", lte: "now/d" } },
   });
 });
 
-test("buildBaiduRequestBody: single-sided dateBefore omits gte", () => {
+test("buildBaiduRequestBody: dateBefore alone gets an epoch lower bound", () => {
   const body = buildBaiduRequestBody({
     query: "q",
     count: 5,
@@ -85,7 +87,7 @@ test("buildBaiduRequestBody: single-sided dateBefore omits gte", () => {
     excludedSites: [],
   });
   assert.deepEqual(body.search_filter, {
-    range: { page_time: { lte: "2026-03-01" } },
+    range: { page_time: { gte: "1970-01-01", lte: "2026-03-01" } },
   });
 });
 
@@ -359,4 +361,34 @@ test("isRetryableSearchError: status wins over message; message is the fallback"
   assert.equal(isRetryableSearchError(timeout), true);
   assert.equal(isRetryableSearchError(new TypeError("fetch failed")), true);
   assert.equal(isRetryableSearchError(new Error("malformed JSON response")), false);
+});
+
+test("baiduQueryLength: non-ASCII characters count double", () => {
+  assert.equal(baiduQueryLength("OpenClaw"), 8);
+  assert.equal(baiduQueryLength("百度AI"), 6);
+  assert.equal(baiduQueryLength(""), 0);
+});
+
+test("buildBaiduRequestBody: query rewrite is enabled only past Baidu's 72-char limit", () => {
+  const short = buildBaiduRequestBody({ query: "汉".repeat(36), count: 5 });
+  assert.equal(short.query_policy, undefined);
+  const long = buildBaiduRequestBody({ query: "汉".repeat(37), count: 5 });
+  assert.deepEqual(long.query_policy, { enable_rewrite: true });
+  assert.equal(long.messages[0].content, "汉".repeat(37));
+});
+
+test("buildBaiduRequestBody: site filter is capped at Baidu's 20-site limit", () => {
+  const sites = Array.from({ length: 25 }, (_, i) => `s${i}.example`);
+  const body = buildBaiduRequestBody({ query: "q", count: 5, sites });
+  assert.equal(body.search_filter.match.site.length, 20);
+  assert.equal(body.search_filter.match.site[0], "s0.example");
+});
+
+test("mapBaiduReferences: strips Baidu control-char markers from title and snippet", () => {
+  const [result] = mapBaiduReferences([
+    { title: "河北\u0004天气\u0005", url: "https://a.example/", content: "今日天气\u0004,周末天气\u0005\n下一行" },
+  ]);
+  assert.equal(result.title, "河北天气");
+  assert.equal(result.description, "今日天气,周末天气\n下一行");
+  assert.equal(stripControlChars("a\tb\u0000c"), "a\tbc");
 });

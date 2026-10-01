@@ -66,18 +66,19 @@ openclaw run "帮我搜一下 xxx"
 
 | 参数 | 说明 | 默认 |
 |---|---|---|
-| `query` | 搜索关键词；首尾空白自动去除，空字符串拒绝（`empty_query`），超 500 字符截断 | 必填 |
+| `query` | 搜索关键词；首尾空白自动去除，空字符串拒绝（`empty_query`），超 500 字符截断；百度只检索前 72 个字符（汉字算 2 个），超出时自动开启百度 query 改写（`query_policy.enable_rewrite`） | 必填 |
 | `count` | 返回结果条数，钳制在 1–10（小数向下取整，非数字回退默认） | 5 |
 | `freshness` | 时效快捷值：`pd`/`pw`/`pm`/`py`（日/周/月/年）或 `day`/`week`/`month`/`year`；不可与日期参数同用 | 无 |
-| `date_after` | 限定结果发布时间之后，`YYYY-MM-DD` | 无 |
+| `date_after` | 限定结果发布时间从这一天起（含当天），`YYYY-MM-DD` | 无 |
 | `date_before` | 限定结果发布时间截止到这一天（含当天），`YYYY-MM-DD` | 无 |
-| `site` | 站点过滤（如 `site:baidu.com` 风格），字符串或数组；自动归一化为小写域名（去掉 `site:`、协议和路径）并去重 | 无 |
+| `site` | 站点过滤（如 `site:baidu.com` 风格），字符串或数组；自动归一化为小写域名（去掉 `site:`、协议和路径）并去重；最多 20 个（百度上限） | 无 |
 | `exclude_sites` | 屏蔽站点，字符串或数组；归一化规则同 `site` | 无 |
 
 ## 结果处理
 
 - **去重**：按归一化 URL 去重（忽略大小写、fragment、尾部斜杠），保留第一条
 - **摘要截断**：单条摘要超 500 字符截断并加 `…`
+- **清理控制字符**：去掉百度在标题/摘要里嵌入的 `\u0004`/`\u0005` 等高亮标记
 - **发布时间归一化**：`YYYY-M-D`/`YYYY/M/D` 补零、`YYYY年M月D日`、时间戳、可解析日期统一转 `YYYY-MM-DD`（时间戳等按北京时间取日期，不受宿主时区影响），解析不了的保留原文
 
 ## 容错
@@ -92,7 +93,7 @@ openclaw run "帮我搜一下 xxx"
 - 鉴权：`Authorization: Bearer <bce-v3/ALTAK-...>`，附 `X-Appbuilder-From: openclaw`
 - `freshness`（`pd`/`pw`/`pm`/`py` 或 `day`/`week`/`month`/`year`）映射为顶层 `search_recency_filter`
  （`day`/`week`/`month`/`year`，百度文档值；`page_time` 实测被百度忽略，不用），
-  `date_after`/`date_before` 映射为 `search_filter.range.page_time {gte, lte}`（两端都包含）（单边只发有值的一侧），
+  `date_after`/`date_before` 映射为 `search_filter.range.page_time {gte, lte}`（两端都包含；百度要求两端同时存在，只给一侧时另一侧补 `1970-01-01` / `now/d`），
   `site` 映射为 `search_filter.match.site`，`exclude_sites` 映射为 `block_websites`
 - 响应 `references[]` 映射为标准 `web_search` 结果，自带结果缓存
   （缓存 key 覆盖 query/count/时效/站点等全部维度）

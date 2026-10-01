@@ -67,18 +67,19 @@ Besides `query`, `web_search` accepts these optional parameters (exposed via the
 
 | Parameter | Description | Default |
 |---|---|---|
-| `query` | Keywords; trimmed, empty strings rejected (`empty_query`), truncated past 500 chars | required |
+| `query` | Keywords; trimmed, empty strings rejected (`empty_query`), truncated past 500 chars; Baidu only searches the first 72 chars (non-ASCII counts as 2), so longer queries turn on Baidu query rewrite (`query_policy.enable_rewrite`) | required |
 | `count` | Result count, clamped to 1–10 (floats floored, non-numeric falls back) | 5 |
 | `freshness` | Recency shortcut: `pd`/`pw`/`pm`/`py` (day/week/month/year) or `day`/`week`/`month`/`year`; mutually exclusive with date params | none |
-| `date_after` | Only results published after this, `YYYY-MM-DD` | none |
+| `date_after` | Only results published on or after this date, `YYYY-MM-DD` | none |
 | `date_before` | Only results published on or before this date, `YYYY-MM-DD` | none |
-| `site` | Restrict to sites (e.g. `site:baidu.com` style), string or array; normalized to bare lowercase hosts (strips `site:`, scheme and path) + deduped | none |
+| `site` | Restrict to sites (e.g. `site:baidu.com` style), string or array; normalized to bare lowercase hosts (strips `site:`, scheme and path) + deduped; at most 20 (Baidu limit) | none |
 | `exclude_sites` | Block these sites, string or array; normalized like `site` | none |
 
 ## Result handling
 
 - **Dedup**: results are deduped by normalized URL (case, fragment, trailing slash ignored), first wins
 - **Snippet cap**: descriptions longer than 500 chars are truncated with `…`
+- **Control-char cleanup**: strips Baidu's embedded `\u0004`/`\u0005` highlight markers from titles and snippets
 - **Date normalization**: `YYYY-M-D`/`YYYY/M/D` zero-padded, `YYYY年M月D日`, timestamps and parseable dates unified to `YYYY-MM-DD` (instants use the Beijing calendar day, independent of host timezone); unparseable values kept as-is
 
 ## Fault tolerance
@@ -93,7 +94,7 @@ Besides `query`, `web_search` accepts these optional parameters (exposed via the
 - Auth: `Authorization: Bearer <bce-v3/ALTAK-...>` with `X-Appbuilder-From: openclaw`
 - `freshness` maps to top-level `search_recency_filter` (`day`/`week`/`month`/`year`;
   `page_time` is ignored by Baidu, so it is not used), `date_after`/`date_before`
-  map to `search_filter.range.page_time {gte, lte}` (both inclusive) (single-sided when only one bound),
+  map to `search_filter.range.page_time {gte, lte}` (both inclusive; Baidu requires both bounds, so a missing one is filled with `1970-01-01` / `now/d`),
   `site` to `search_filter.match.site`, `exclude_sites` to `block_websites`
 - `references[]` map to standard `web_search` results with result caching
   (cache key covers query/count/recency/sites and every other dimension)

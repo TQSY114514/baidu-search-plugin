@@ -104,7 +104,7 @@ const BaiduSearchSchema = {
   properties: {
     query: {
       type: "string",
-      description: "搜索关键词",
+      description: "搜索关键词。请用简短关键词：百度只检索前 72 个字符（一个汉字算 2 个，约 36 个汉字）",
     },
     count: {
       type: "integer",
@@ -140,7 +140,7 @@ const BaiduSearchSchema = {
 
 export async function executeBaiduSearch(args, searchConfig, signal) {
   const apiKey =
-    readConfiguredSecretString(searchConfig?.apiKey, "tools.web.search.apiKey") ??
+    readConfiguredSecretString(searchConfig?.apiKey, BAIDU_CREDENTIAL_PATH) ??
     readProviderEnvValue(["BAIDU_API_KEY", "QIANFAN_API_KEY"]);
   if (!apiKey) {
     return {
