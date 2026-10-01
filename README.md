@@ -6,7 +6,7 @@
 
 <img src="chart.svg" alt="ClawHub downloads trend" width="720">
 
-> 趋势图数据由 GitHub Actions 每天自动抓取 ClawHub API 并重绘（见 `.github/workflows/track-downloads.yml`），
+> 趋势图数据由 GitHub Actions 每天自动抓取 ClawHub 插件页面并重绘（见 `.github/workflows/track-downloads.yml`），
 > 历史数据见 [`downloads.json`](downloads.json)。
 
 OpenClaw `web_search` 的百度 AI 搜索 Provider。调用百度千帆 `v2/ai_search/web_search`
@@ -79,12 +79,29 @@ openclaw run "帮我搜一下 xxx"
 - **去重**：按归一化 URL 去重（忽略大小写、fragment、尾部斜杠），保留第一条
 - **摘要截断**：单条摘要超 500 字符截断并加 `…`
 - **清理控制字符**：去掉百度在标题/摘要里嵌入的 `\u0004`/`\u0005` 等高亮标记
+- **附加字段**：`siteName` 优先用百度返回的站点名 `website`；百度给出时附带 `rerankScore`（相关性）、`authorityScore`（权威性，均为 0–1）和百家号作者 `author`
 - **发布时间归一化**：`YYYY-M-D`/`YYYY/M/D` 补零、`YYYY年M月D日`、时间戳、可解析日期统一转 `YYYY-MM-DD`（时间戳等按北京时间取日期，不受宿主时区影响），解析不了的保留原文
 
 ## 容错
 
-- 瞬时错误（429/502/503/504、超时、网络错误）自动重试最多 2 次（300ms/800ms 退避；429 有 `Retry-After` 头时按头等待，上限 10s，避免长时间 sleep 拖爆宿主工具调用超时）；401/403 类直接抛；工具调用被取消时立即中止请求与重试等待
-- 百度返回 `code != 0` 时返回结构化 `baidu_search_error`（带 `code` 字段供调用方按码降级），不抛异常中断工具循环
+- 瞬时错误（429/502/503/504、超时、网络错误）自动重试最多 2 次（300ms/800ms 退避；429 有 `Retry-After` 头时按头等待，上限 10s，避免长时间 sleep 拖爆宿主工具调用超时）；401/403 类直接抛；免费额度用完 / 欠费（百度同样用 429 返回）不重试
+- 工具调用被取消时立即中止请求与重试等待
+- **省配额**：同时发起的相同搜索合并成一次请求；只有全部调用方都取消时才中止这次请求
+- 百度返回 `code != 0`（数字码或 `QUOTA_USER_DAILY_FREE` 这类字符串码）时返回结构化 `baidu_search_error`（带 `code`、`requestId` 字段供调用方按码降级），不抛异常中断工具循环
+- **可操作提示**：Key 无效、免费额度用完、欠费、QPS 超限等常见错误会附带中文处理建议（结构化错误里的 `hint` 字段，或追加在抛出的错误信息末尾）
+
+## 缓存与超时
+
+两项都读宿主的通用 `web_search` 配置：
+
+| 配置 | 说明 | 默认 |
+|---|---|---|
+| `tools.web.search.cacheTtlMinutes` | 结果缓存分钟数；百度免费额度为每月 1500 次（约每天 50 次），调大可以省配额；`0` 关闭缓存 | 15 |
+| `tools.web.search.timeoutSeconds` | 单次请求超时（秒）；重试时每次单独计时 | 30 |
+
+```bash
+openclaw config set tools.web.search.cacheTtlMinutes 60
+```
 
 ## 工作原理
 
@@ -103,6 +120,18 @@ openclaw run "帮我搜一下 xxx"
 - 复用 OpenClaw SDK 的 `withTrustedWebSearchEndpoint`（SSRF 防护）、
   搜索结果缓存、外部内容包裹（untrusted 标记）等机制
 - 插件不含任何密钥，key 从配置（支持 SecretRef）或环境变量读取
+
+## 开发
+
+```bash
+npm test            # 单元测试 + index.js 行为测试（用 test/fixtures 里的 SDK 替身，不需要安装 openclaw）
+npm run typecheck   # 对 lib/ 做 JSDoc 类型检查（TypeScript checkJs）
+BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # 真实接口冒烟测试，3 次调用
+```
+
+- CI：`test` workflow 在 Node 22/24/26 上跑测试并做类型检查
+- 真实接口冒烟：`live-smoke` workflow 每天北京时间 09:00 运行，lib/index.js 有改动时也会运行；需要在仓库 Secrets 里配置 `BAIDU_API_KEY`，没配置时自动跳过
+- 发布：先升级 `package.json` 版本号并推送，然后在 Actions 里手动运行 **Package publish**；通过 ClawHub trusted publisher（GitHub OIDC）认证，不需要保存 token。PR 上会自动做一次 dry-run
 
 ## License
 

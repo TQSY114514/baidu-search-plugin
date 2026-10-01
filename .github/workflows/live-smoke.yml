@@ -1,0 +1,30 @@
+name: Baidu live smoke
+
+on:
+  schedule:
+    # 每天 01:00 UTC = 北京时间 09:00；每次 3 次调用，约占免费额度 6%/月
+    - cron: '0 1 * * *'
+  push:
+    branches: [master]
+    paths: ['index.js', 'lib/**', '.github/live-smoke.mjs']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run live smoke test
+        env:
+          BAIDU_API_KEY: ${{ secrets.BAIDU_API_KEY }}
+        run: node .github/live-smoke.mjs

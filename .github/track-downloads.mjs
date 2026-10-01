@@ -22,8 +22,10 @@ async function fetchDownloads() {
   const res = await fetch(PAGE);
   if (!res.ok) throw new Error(`ClawHub page responded ${res.status}`);
   const html = await res.text();
-  const m = html.match(/downloads:(\d+)/);
-  if (!m) throw new Error('downloads count not found in ClawHub page');
+  // Anchor on the adjacent stats fields so a "downloads:" belonging to some
+  // other embedded package can't be picked up; fail loudly if the layout changes.
+  const m = html.match(/downloads:(\d+),installs:\d+/);
+  if (!m) throw new Error('downloads count not found in ClawHub page (page layout changed?)');
   return Number(m[1]);
 }
 
@@ -38,6 +40,11 @@ async function main() {
     : { package: '@tqsy114514/baidu-search-plugin', series: [] };
 
   const last = data.series[data.series.length - 1];
+  // Downloads are cumulative; a drop means we scraped the wrong number.
+  const previous = data.series.findLast((p) => p.date !== today);
+  if (previous && downloads < previous.downloads) {
+    throw new Error(`downloads went down (${previous.downloads} -> ${downloads}); refusing to record`);
+  }
   if (last && last.date === today) {
     last.downloads = downloads; // 当天已记录：修正数值
     console.log(`Updated today entry: ${today} = ${downloads}`);

@@ -1,0 +1,50 @@
+name: Package publish
+
+# Real publishes: Actions → "Package publish" → Run workflow (dry_run off).
+# Auth is ClawHub trusted publishing via GitHub OIDC (no stored token), bound to
+# this repo + this workflow filename. Pull requests get a dry run.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview only (no upload)
+        type: boolean
+        default: false
+      changelog:
+        description: Release notes shown on ClawHub
+        type: string
+        required: false
+  pull_request:
+    branches: [master]
+    paths: ['index.js', 'lib/**', 'package.json', 'openclaw.plugin.json', 'README*.md']
+
+permissions: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm test
+
+  publish:
+    needs: test
+    # The reusable workflow needs an OIDC token even for dry runs, which fork
+    # PRs cannot get.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    # Pinned to a fixed commit of the official ClawHub reusable workflow.
+    uses: openclaw/clawhub/.github/workflows/package-publish.yml@72a32c2626700c4b05954289b8bf7ed4ccf00115
+    with:
+      # source/ref default to this repository at the triggering commit.
+      dry_run: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
+      family: code-plugin
+      changelog: ${{ inputs.changelog }}

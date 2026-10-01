@@ -15,6 +15,7 @@ import {
   parseRetryAfterMs,
   readErrorStatus,
   readRetryAfterMs,
+  resolveBaiduErrorHint,
   stripControlChars,
   resolveBaiduErrorCode,
   resolveSiteName,
@@ -260,13 +261,15 @@ test("parseRetryAfterMs: garbage returns undefined", () => {
   assert.equal(parseRetryAfterMs("soon"), undefined);
 });
 
-test("resolveBaiduErrorCode: numeric strings count as failure codes", () => {
+test("resolveBaiduErrorCode: numeric and symbolic codes count as failures", () => {
   assert.equal(resolveBaiduErrorCode({ code: 400 }), 400);
   assert.equal(resolveBaiduErrorCode({ code: "400" }), 400);
   assert.equal(resolveBaiduErrorCode({ code: 0 }), 0);
   assert.equal(resolveBaiduErrorCode({ code: "0" }), 0);
   assert.equal(resolveBaiduErrorCode({}), undefined);
-  assert.equal(resolveBaiduErrorCode({ code: "oops" }), undefined);
+  assert.equal(resolveBaiduErrorCode({ code: "QUOTA_USER_DAILY_FREE" }), "QUOTA_USER_DAILY_FREE");
+  assert.equal(resolveBaiduErrorCode({ code: " " }), undefined);
+  assert.equal(resolveBaiduErrorCode({ code: null }), undefined);
   assert.equal(resolveBaiduErrorCode(undefined), undefined);
 });
 
@@ -391,4 +394,42 @@ test("mapBaiduReferences: strips Baidu control-char markers from title and snipp
   assert.equal(result.title, "河北天气");
   assert.equal(result.description, "今日天气,周末天气\n下一行");
   assert.equal(stripControlChars("a\tb\u0000c"), "a\tbc");
+});
+
+test("mapBaiduReferences: uses Baidu website, scores and Baijiahao author when present", () => {
+  const [r] = mapBaiduReferences([
+    {
+      title: "T",
+      url: "https://baijiahao.baidu.com/s?id=1",
+      content: "c",
+      website: "百家号",
+      rerank_score: 0.87654,
+      authority_score: "0.5",
+      web_extensions: { author_info: { name: " 作者\u0004 " } },
+    },
+  ]);
+  assert.equal(r.siteName, "百家号");
+  assert.equal(r.rerankScore, 0.877);
+  assert.equal(r.authorityScore, 0.5);
+  assert.equal(r.author, "作者");
+  const [bare] = mapBaiduReferences([{ title: "T", url: "https://a.example/", content: "c", rerank_score: null }]);
+  assert.deepEqual(Object.keys(bare), ["title", "url", "description", "published", "siteName"]);
+});
+
+test("resolveBaiduErrorHint: maps documented codes; ignores numbers inside messages", () => {
+  assert.match(resolveBaiduErrorHint({ code: "QUOTA_USER_DAILY_FREE" }), /免费额度/);
+  assert.match(resolveBaiduErrorHint({ code: 17 }), /免费额度/);
+  assert.match(resolveBaiduErrorHint({ code: "BILLING_INSUFFICIENT_BALANCE" }), /欠费/);
+  assert.match(resolveBaiduErrorHint({ status: 429, code: "RATE_LIMIT_SEARCH_QPS" }), /频繁/);
+  assert.match(resolveBaiduErrorHint({ status: 401, message: "[Code: InvalidHTTPAuthHeader]" }), /API Key 无效/);
+  assert.match(resolveBaiduErrorHint({ status: 401 }), /API Key 无效/);
+  assert.match(resolveBaiduErrorHint({ status: 403 }), /权限/);
+  assert.equal(resolveBaiduErrorHint({ status: 500, message: "failed at 2026-09-17 18:00, id 17" }), undefined);
+  assert.equal(resolveBaiduErrorHint(), undefined);
+});
+
+test("isRetryableSearchError: 429 for exhausted quota or unpaid balance is final", () => {
+  assert.equal(isRetryableSearchError({ status: 429, code: "QUOTA_USER_DAILY_FREE" }), false);
+  assert.equal(isRetryableSearchError({ status: 429, code: "BILLING_INSUFFICIENT_BALANCE" }), false);
+  assert.equal(isRetryableSearchError({ status: 429, code: "RATE_LIMIT_SEARCH_QPS" }), true);
 });

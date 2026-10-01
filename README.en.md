@@ -6,7 +6,7 @@
 
 <img src="chart.svg" alt="ClawHub downloads trend" width="720">
 
-> The trend chart is redrawn daily by GitHub Actions fetching the ClawHub API
+> The trend chart is redrawn daily by GitHub Actions scraping the ClawHub plugin page
 > (see `.github/workflows/track-downloads.yml`); history lives in [`downloads.json`](downloads.json).
 
 A Baidu AI Search provider for OpenClaw `web_search`. Calls the Baidu Qianfan
@@ -80,12 +80,29 @@ Besides `query`, `web_search` accepts these optional parameters (exposed via the
 - **Dedup**: results are deduped by normalized URL (case, fragment, trailing slash ignored), first wins
 - **Snippet cap**: descriptions longer than 500 chars are truncated with `…`
 - **Control-char cleanup**: strips Baidu's embedded `\u0004`/`\u0005` highlight markers from titles and snippets
+- **Extra fields**: `siteName` prefers Baidu's `website`; when Baidu provides them, results also carry `rerankScore` (relevance), `authorityScore` (authority, both 0–1) and the Baijiahao `author`
 - **Date normalization**: `YYYY-M-D`/`YYYY/M/D` zero-padded, `YYYY年M月D日`, timestamps and parseable dates unified to `YYYY-MM-DD` (instants use the Beijing calendar day, independent of host timezone); unparseable values kept as-is
 
 ## Fault tolerance
 
-- Transient failures (429/502/503/504, timeouts, network errors) are retried up to 2 times (300ms/800ms backoff; honors `Retry-After` on 429, capped at 10s so a long sleep can't blow past the host tool-call timeout); 401/403-style errors throw immediately; a cancelled tool call aborts the request and any retry wait
-- A Baidu `code != 0` response returns a structured `baidu_search_error` (with a `code` field so callers can branch on it) instead of throwing into the tool loop
+- Transient failures (429/502/503/504, timeouts, network errors) are retried up to 2 times (300ms/800ms backoff; honors `Retry-After` on 429, capped at 10s so a long sleep can't blow past the host tool-call timeout); 401/403-style errors throw immediately; exhausted free quota / unpaid balance (also sent as 429 by Baidu) is not retried
+- A cancelled tool call aborts the request and any retry wait
+- **Quota saving**: concurrent identical searches share one request; it is aborted only when every caller has cancelled
+- A Baidu `code != 0` response (numeric, or symbolic like `QUOTA_USER_DAILY_FREE`) returns a structured `baidu_search_error` (with `code` and `requestId` so callers can branch on it) instead of throwing into the tool loop
+- **Actionable hints**: invalid key, exhausted free quota, unpaid balance and QPS limits come with a fix-it hint (the `hint` field on structured errors, or appended to thrown error messages)
+
+## Caching and timeouts
+
+Both come from the host's shared `web_search` config:
+
+| Setting | Description | Default |
+|---|---|---|
+| `tools.web.search.cacheTtlMinutes` | Result cache lifetime in minutes; Baidu's free tier is 1500 calls/month (~50/day), so a longer TTL saves quota; `0` disables caching | 15 |
+| `tools.web.search.timeoutSeconds` | Per-request timeout in seconds; each retry gets its own timeout | 30 |
+
+```bash
+openclaw config set tools.web.search.cacheTtlMinutes 60
+```
 
 ## How it works
 
@@ -104,6 +121,18 @@ Besides `query`, `web_search` accepts these optional parameters (exposed via the
 - Reuses the OpenClaw SDK's `withTrustedWebSearchEndpoint` (SSRF protection),
   search-result caching, and external-content wrapping (untrusted marking)
 - The plugin ships no credentials; the key comes from config (SecretRef supported) or env vars
+
+## Development
+
+```bash
+npm test            # unit tests + index.js behavior tests (SDK stand-in in test/fixtures; no openclaw install needed)
+npm run typecheck   # JSDoc type check of lib/ (TypeScript checkJs)
+BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # live API smoke test, 3 calls
+```
+
+- CI: the `test` workflow runs tests on Node 22/24/26 plus the type check
+- Live smoke: the `live-smoke` workflow runs daily at 01:00 UTC and on lib/index.js changes; it needs a `BAIDU_API_KEY` repository secret and skips without one
+- Releasing: bump `package.json` version and push, then run **Package publish** from the Actions tab; it authenticates with ClawHub trusted publishing (GitHub OIDC), so no token is stored. Pull requests get a dry run
 
 ## License
 

@@ -38,14 +38,17 @@ import {
   normalizeSiteList,
   readRetryAfterMs,
   resolveBaiduErrorCode,
+  resolveBaiduErrorHint,
   truncateByCodePoints,
 } from "./lib/search-params.js";
+import { createSingleFlight } from "./lib/single-flight.js";
 
 const BAIDU_CREDENTIAL_PATH = "plugins.entries.baidu.config.webSearch.apiKey";
 const BAIDU_SEARCH_ENDPOINT = "https://qianfan.baidubce.com/v2/ai_search/web_search";
 const BAIDU_DOCS_URL = "https://docs.openclaw.ai/tools/web";
 const MAX_QUERY_LENGTH = 500;
 const RETRY_DELAYS_MS = [300, 800];
+const searchFlight = createSingleFlight();
 
 // Sleeps for the backoff delay, waking early (and throwing) on cancellation.
 function sleep(ms, signal) {
@@ -189,12 +192,28 @@ export async function executeBaiduSearch(args, searchConfig, signal) {
     sites.join(","),
     excludedSites.join(","),
   ]);
+  signal?.throwIfAborted();
   const cached = readCachedSearchPayload(cacheKey);
   if (cached) return cached;
 
-  const start = Date.now();
-  const body = buildBaiduRequestBody({ query: finalQuery, count, timeFilters, sites, excludedSites });
+  // Concurrent identical searches share one request (and one quota unit).
+  return searchFlight(
+    cacheKey,
+    (sharedSignal) =>
+      fetchBaiduSearch({
+        apiKey,
+        searchConfig,
+        cacheKey,
+        query: finalQuery,
+        body: buildBaiduRequestBody({ query: finalQuery, count, timeFilters, sites, excludedSites }),
+        signal: sharedSignal,
+      }),
+    signal,
+  );
+}
 
+async function fetchBaiduSearch({ apiKey, searchConfig, cacheKey, query, body, signal }) {
+  const start = Date.now();
   let data;
   let attempt = 0;
   for (;;) {
@@ -222,7 +241,10 @@ export async function executeBaiduSearch(args, searchConfig, signal) {
       break;
     } catch (err) {
       // A cancelled tool call must not be retried.
-      if (signal?.aborted || attempt >= RETRY_DELAYS_MS.length || !isRetryableSearchError(err)) {
+      if (signal?.aborted) throw err;
+      if (attempt >= RETRY_DELAYS_MS.length || !isRetryableSearchError(err)) {
+        const hint = err?.status !== undefined ? resolveBaiduErrorHint(err) : undefined;
+        if (hint && typeof err.message === "string") err.message = `${err.message}（${hint}）`;
         throw err;
       }
       await sleep(readRetryAfterMs(err) ?? RETRY_DELAYS_MS[attempt], signal);
@@ -232,10 +254,13 @@ export async function executeBaiduSearch(args, searchConfig, signal) {
 
   const baiduErrorCode = resolveBaiduErrorCode(data);
   if (baiduErrorCode !== undefined && baiduErrorCode !== 0) {
+    const hint = resolveBaiduErrorHint({ code: baiduErrorCode, message: data.message });
     return {
       error: "baidu_search_error",
       code: baiduErrorCode,
       message: `Baidu AI Search error: ${data.message ?? `code ${baiduErrorCode}`}`,
+      ...(hint ? { hint } : {}),
+      requestId: data.request_id ?? data.requestId,
       docs: BAIDU_DOCS_URL,
     };
   }
@@ -245,7 +270,7 @@ export async function executeBaiduSearch(args, searchConfig, signal) {
   );
 
   const payload = {
-    query: finalQuery,
+    query,
     provider: "baidu",
     count: results.length,
     tookMs: Date.now() - start,

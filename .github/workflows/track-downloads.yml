@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
 
+# Never run two trackers at once: both would commit and the second push fails.
+concurrency:
+  group: track-downloads
+  cancel-in-progress: false
+
 jobs:
   track:
     runs-on: ubuntu-latest
