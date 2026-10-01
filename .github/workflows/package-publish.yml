@@ -2,7 +2,12 @@ name: Package publish
 
 # Real publishes: Actions → "Package publish" → Run workflow (dry_run off).
 # Auth is ClawHub trusted publishing via GitHub OIDC (no stored token), bound to
-# this repo + this workflow filename. Pull requests get a dry run.
+# this repo + this workflow filename + workflow_dispatch. Pull requests get a
+# dry run, which needs no auth.
+#
+# The CLI runs directly in this job: ClawHub's reusable workflow builds a newer
+# CLI whose scoped token mint is rejected by the registry (verified 2026-10-01),
+# while the npm CLI's mint succeeds for this trusted-publisher config.
 on:
   workflow_dispatch:
     inputs:
@@ -20,31 +25,33 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: package-publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  test:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - run: npm test
-
-  publish:
-    needs: test
-    # The reusable workflow needs an OIDC token even for dry runs, which fork
-    # PRs cannot get.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-    # Pinned to a fixed commit of the official ClawHub reusable workflow.
-    uses: openclaw/clawhub/.github/workflows/package-publish.yml@72a32c2626700c4b05954289b8bf7ed4ccf00115
-    with:
-      # source/ref default to this repository at the triggering commit.
-      dry_run: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
-      family: code-plugin
-      changelog: ${{ inputs.changelog }}
+      - name: Publish to ClawHub
+        env:
+          DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
+          CHANGELOG: ${{ inputs.changelog }}
+        run: |
+          args=(package publish . --family code-plugin --no-input
+                --source-repo "$GITHUB_REPOSITORY" --source-commit "$GITHUB_SHA" --source-ref "$GITHUB_REF")
+          if [[ "$DRY_RUN" == "true" ]]; then
+            args+=(--dry-run)
+          else
+            args+=(--wait --wait-timeout 1800)
+          fi
+          if [[ -n "$CHANGELOG" ]]; then args+=(--changelog "$CHANGELOG"); fi
+          npx --yes clawhub@0.23.3 "${args[@]}"
