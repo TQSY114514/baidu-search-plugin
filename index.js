@@ -88,7 +88,7 @@ function buildBaiduWebSearchProviderBase() {
     credentialLabel: "Baidu Qianfan AI Search API key",
     envVars: ["BAIDU_API_KEY", "QIANFAN_API_KEY"],
     placeholder: "bce-v3/ALTAK-...",
-    signupUrl: "https://console.bce.baidu.com/qianfan/",
+    signupUrl: "https://console.bce.baidu.com/ai-search/qianfan/ais/console/apiKey",
     docsUrl: BAIDU_DOCS_URL,
     autoDetectOrder: 30,
     credentialPath: BAIDU_CREDENTIAL_PATH,

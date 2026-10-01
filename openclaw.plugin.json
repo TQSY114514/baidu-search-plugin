@@ -27,7 +27,7 @@
   "uiHints": {
     "webSearch.apiKey": {
       "label": "Baidu Qianfan AI Search API Key",
-      "help": "bce-v3/ALTAK-... 格式的千帆 API Key。也可用 QIANFAN_API_KEY 环境变量，或用 SecretRef 引用已存密钥。",
+      "help": "在 https://console.bce.baidu.com/ai-search/qianfan/ais/console/apiKey 创建的 bce-v3/ALTAK-... 格式 API Key（整串都是 Key，不是 AK/SK）。也可用 BAIDU_API_KEY / QIANFAN_API_KEY 环境变量，或用 SecretRef 引用已存密钥。",
       "sensitive": true
     }
   }
