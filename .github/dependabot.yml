@@ -1,9 +1,11 @@
 version: 2
 updates:
+  # nosemgrep: package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
+  # nosemgrep: package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
