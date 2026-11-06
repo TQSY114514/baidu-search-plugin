@@ -3,6 +3,14 @@
 每个版本的说明会作为 ClawHub 更新日志和 GitHub Release 内容发布（见 `.github/workflows/package-publish.yml`）。
 还没发布的改动写在最上面的 `## Unreleased` 小节里；发版时把它改成 `## <版本号>`。
 
+## 1.4.0
+
+- 修复「近一天」时效过滤：百度 `search_recency_filter` 只支持 week/month/semiyear/year，`freshness: pd`/`day` 之前发的 `day` 不在文档范围内；现在改为按北京时间「昨天～今天」的 `page_time` 日期范围
+- `exclude_sites` 也限制为 20 个（百度 `block_websites` 上限）；`site`/`exclude_sites` 先去重再截断，缓存与实际请求一致
+- 新增本地限速：插件每秒最多发 `webSearch.qps` 次请求（默认 1，即免费额度的限额），并发的不同搜索排队发出，不再撞百度限流后反复重试；开通后付费可设为 3，设为 0 不限速
+- 新增插件配置 `webSearch.edition`（`standard` 标准版 / `turbo` 增强版，计费不同）和 `webSearch.safeSearch`（百度安全搜索）
+- 移除 `openclaw.install.npmSpec`：本插件只发布在 ClawHub，默认安装不再先去 npm 查找
+
 ## 1.3.2 (2026-10-30)
 
 - 无行为变化。查询与摘要的 Unicode 安全截断、百度 query 长度计算改为按码元游标扫描，不再分配中间数组；摘要截断到 500 字符即停止

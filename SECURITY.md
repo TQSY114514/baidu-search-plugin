@@ -4,8 +4,8 @@
 
 | Version | Supported |
 | ------- | --------- |
-| 1.2.x   | ✅        |
-| < 1.2   | ❌        |
+| 1.4.x   | ✅        |
+| < 1.4   | ❌        |
 
 ## Reporting a Vulnerability
 
@@ -25,7 +25,7 @@
 
 ---
 
-*English summary: supported range is 1.2.x. Report privately via
+*English summary: supported range is 1.4.x. Report privately via
 Security → Report a vulnerability, never in a public issue.
 No data is collected by this plugin; never paste your Baidu API key
 in issues, logs or screenshots.*
