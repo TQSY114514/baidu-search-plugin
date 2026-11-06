@@ -196,7 +196,7 @@ or appended to the thrown error message).
 | 403 | Key lacks Baidu AI Search permission | Check the key's services / permissions on the API Key page |
 | `QUOTA_USER_DAILY_FREE` | Free quota used up | [Enable pay-as-you-go](https://console.bce.baidu.com/qianfan/studio/resource) or wait for quota to refresh |
 | `BILLING_INSUFFICIENT_BALANCE` | Account balance overdue | [Top up](https://console.bce.baidu.com/finance/recharge) |
-| 429, `RATE_LIMIT_*` | Too many requests (free tier: 1 QPS; pay-as-you-go: 3 QPS) | Retry later; the plugin retries automatically and honors `Retry-After` |
+| 429, `RATE_LIMIT_*` | Too many requests (free tier: 1 QPS; pay-as-you-go: 3 QPS) | Retry later; the plugin retries automatically and honors `Retry-After`. Check that [`qps`](#plugin-settings) is not above your account's limit |
 
 Network errors, timeouts and 502/503/504 are retried up to 2 times; exhausted quota and unpaid
 balance are not. Cancelling the tool call stops the request and any retry wait immediately.
@@ -241,6 +241,8 @@ BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # live API smoke te
   (a failed ClawScan attempt keeps the version reserved, so it cannot be retried); after a successful publish it tags
   `v<version>` and creates a GitHub Release. Pull requests get a dry run
 - Download stats: the `track-downloads` workflow commits the data and chart to the `stats` branch, outside master's history
+- SDK compat: the `sdk-compat` workflow runs `.github/sdk-contract.mjs` weekly against the oldest supported and the latest real OpenClaw (no key, no quota)
+- Alerts: when the live smoke, SDK compat or download tracking fails, the `check-alerts` workflow opens an issue and closes it once the check passes again
 
 ## License
 

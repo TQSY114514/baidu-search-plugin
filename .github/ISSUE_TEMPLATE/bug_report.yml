@@ -1,0 +1,38 @@
+name: 问题反馈 / Bug report
+description: 插件报错、搜索结果不对、装不上等 / Errors, wrong results, install problems
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **请勿粘贴 API Key**（`bce-v3/ALTAK-...`），日志和截图里也请先打码。安全问题请走 Security → Report a vulnerability。
+        **Never paste your API key** (also redact it in logs and screenshots). Report security issues privately via Security → Report a vulnerability.
+
+        常见的 Key、额度、限流问题可以先看 README 的「常见错误」一节。
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本 / Plugin version
+      description: "`openclaw plugins list` 里 baidu 那一行"
+      placeholder: "1.4.0"
+    validations:
+      required: true
+  - type: input
+    id: openclaw-version
+    attributes:
+      label: OpenClaw 版本 / OpenClaw version
+      description: "`openclaw --version`"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么 / What happened
+      description: 搜了什么（query 和参数）、期望什么、实际得到什么 / The query and parameters, what you expected, what you got
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: 报错或返回内容 / Error or tool output
+      description: 包括 `error`、`code`、`hint`、`requestId` 等字段 / Include fields such as error, code, hint, requestId
+      render: text

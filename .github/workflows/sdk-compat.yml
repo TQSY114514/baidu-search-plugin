@@ -1,0 +1,32 @@
+name: OpenClaw SDK compat
+
+# The unit tests run against a stub SDK; this runs the plugin against real
+# openclaw releases (the oldest supported one and the latest) so host changes
+# that break it show up without anyone touching the repo. No API key needed.
+on:
+  schedule:
+    # 每周一 02:00 UTC = 北京时间 10:00
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Keep the first entry equal to openclaw.compat.pluginApi's floor.
+        openclaw: ['2026.9.4', 'latest']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+      - name: Install openclaw@${{ matrix.openclaw }}
+        run: npm install --no-save --no-audit --no-fund --ignore-scripts "openclaw@${{ matrix.openclaw }}"
+      - run: node --test .github/sdk-contract.mjs

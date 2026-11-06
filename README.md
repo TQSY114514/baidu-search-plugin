@@ -235,6 +235,8 @@ BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # 真实接口冒�
   发布前会检查这个版本没发过、也没打过 tag（ClawScan 失败的尝试会一直占着版本号，重试不了）；
   发布成功后自动打 `v<版本号>` tag 并创建 GitHub Release。PR 上会自动做一次 dry-run
 - 下载统计：`track-downloads` workflow 每天把数据和图表提交到 `stats` 分支，不进 master 历史
+- SDK 兼容：`sdk-compat` workflow 每周用最低支持版本和最新版的真实 OpenClaw 跑一遍 `.github/sdk-contract.mjs`（不需要 Key，不耗额度）
+- 告警：冒烟测试、SDK 兼容、下载统计失败时，`check-alerts` workflow 会自动开一个 issue，恢复后自动关闭
 
 ## License
 

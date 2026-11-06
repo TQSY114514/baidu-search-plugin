@@ -1,7 +1,7 @@
 # Changelog
 
 每个版本的说明会作为 ClawHub 更新日志和 GitHub Release 内容发布（见 `.github/workflows/package-publish.yml`）。
-发版前先在这里加上新版本的小节，标题写成 `## <版本号>`。
+还没发布的改动写在最上面的 `## Unreleased` 小节里；发版时把它改成 `## <版本号>`。
 
 ## 1.3.2 (2026-10-30)
 
