@@ -221,15 +221,18 @@ openclaw config set plugins.entries.baidu.config.webSearch.safeSearch true --str
 ```bash
 npm test            # 单元测试 + index.js 行为测试（用 test/fixtures 里的 SDK 替身，不需要安装 openclaw）
 npm run typecheck   # 对 lib/ 做 JSDoc 类型检查（TypeScript checkJs）
-BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # 真实接口冒烟测试，4 次调用
+BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # 真实接口冒烟测试，5 次调用
 ```
 
 - CI：`test` workflow 在 Node 22/24/26 上跑测试并做类型检查
 - 真实接口冒烟：`live-smoke` workflow 每天北京时间 09:00 运行，`lib/`、`index.js` 有改动时也会运行；
   需要在仓库的 **Settings → Secrets and variables → Actions → Secrets** 里添加 `BAIDU_API_KEY`
   （不要加在 Variables 里，那里是明文），没配置时自动跳过
-- 发布：先升级 `package.json` 版本号并推送，然后在 Actions 里手动运行 **Package publish**；
-  通过 ClawHub trusted publisher（GitHub OIDC）认证，不需要保存 token。PR 上会自动做一次 dry-run
+- 发布：先升级 `package.json` 版本号、在 `CHANGELOG.md` 加上同名小节并推送，然后在 Actions 里手动运行 **Package publish**；
+  通过 ClawHub trusted publisher（GitHub OIDC）认证，不需要保存 token。更新日志默认取 `CHANGELOG.md` 里对应版本的小节。
+  发布前会检查这个版本没发过、也没打过 tag（ClawScan 失败的尝试会一直占着版本号，重试不了）；
+  发布成功后自动打 `v<版本号>` tag 并创建 GitHub Release。PR 上会自动做一次 dry-run
+- 下载统计：`track-downloads` workflow 每天把数据和图表提交到 `stats` 分支，不进 master 历史
 
 ## License
 

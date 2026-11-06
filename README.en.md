@@ -226,15 +226,19 @@ balance are not. Cancelling the tool call stops the request and any retry wait i
 ```bash
 npm test            # unit tests + index.js behavior tests (SDK stand-in in test/fixtures; no openclaw install needed)
 npm run typecheck   # JSDoc type check of lib/ (TypeScript checkJs)
-BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # live API smoke test, 4 calls
+BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # live API smoke test, 5 calls
 ```
 
 - CI: the `test` workflow runs tests on Node 22/24/26 plus the type check
 - Live smoke: the `live-smoke` workflow runs daily at 01:00 UTC and on `lib/` / `index.js` changes;
   it needs `BAIDU_API_KEY` under **Settings → Secrets and variables → Actions → Secrets**
   (not Variables, which are plaintext) and skips without it
-- Releasing: bump `package.json` version and push, then run **Package publish** from the Actions tab;
-  it authenticates with ClawHub trusted publishing (GitHub OIDC), so no token is stored. Pull requests get a dry run
+- Releasing: bump the `package.json` version, add a matching section to `CHANGELOG.md` and push, then run **Package publish**
+  from the Actions tab; it authenticates with ClawHub trusted publishing (GitHub OIDC), so no token is stored. Release notes
+  default to that version's `CHANGELOG.md` section. Before uploading it checks the version is neither published nor tagged
+  (a failed ClawScan attempt keeps the version reserved, so it cannot be retried); after a successful publish it tags
+  `v<version>` and creates a GitHub Release. Pull requests get a dry run
+- Download stats: the `track-downloads` workflow commits the data and chart to the `stats` branch, outside master's history
 
 ## License
 

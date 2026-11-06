@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readReleaseNotes } from "../.github/release-notes.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -38,6 +39,14 @@ test("openclaw.plugin.json: valid JSON with contracts and uiHints", () => {
   assert.equal(manifest.uiHints["webSearch.apiKey"].sensitive, true);
   // apiKey may be a plain string or a SecretRef object.
   assert.deepEqual(manifest.configSchema.properties.webSearch.properties.apiKey.type, ["string", "object"]);
+});
+
+test("CHANGELOG.md has release notes for the package.json version", () => {
+  const { version } = readJson("package.json");
+  const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
+  assert.notEqual(readReleaseNotes(changelog, version), "", `add a "## ${version}" section to CHANGELOG.md`);
+  // A dated heading still matches, and a version prefix does not.
+  assert.equal(readReleaseNotes("## 1.2.10 (2026-01-01)\n- a\n## 1.2.1\n- b\n", "1.2.1"), "- b");
 });
 
 test("LICENSE exists and starts with the MIT license header", () => {

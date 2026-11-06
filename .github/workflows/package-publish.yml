@@ -5,6 +5,10 @@ name: Package publish
 # this repo + this workflow filename + workflow_dispatch. Pull requests get a
 # dry run, which needs no auth.
 #
+# Release notes come from the package.json version's section in CHANGELOG.md
+# (the `changelog` input overrides it). After a successful publish the
+# `release` job tags the commit as v<version> and creates a GitHub Release.
+#
 # The CLI runs directly in this job: ClawHub's reusable workflow builds a newer
 # CLI whose scoped token mint is rejected by the registry (verified 2026-10-01),
 # while the npm CLI's mint succeeds for this trusted-publisher config.
@@ -16,18 +20,21 @@ on:
         type: boolean
         default: false
       changelog:
-        description: Release notes shown on ClawHub
+        description: Release notes shown on ClawHub (defaults to the CHANGELOG.md section)
         type: string
         required: false
   pull_request:
     branches: [master]
-    paths: ['index.js', 'lib/**', 'package.json', 'openclaw.plugin.json', 'README*.md']
+    paths: ['index.js', 'lib/**', 'package.json', 'openclaw.plugin.json', 'README*.md', 'CHANGELOG.md']
 
 permissions: {}
 
 concurrency:
   group: package-publish-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  PACKAGE: '@tqsy114514/baidu-search-plugin'
 
 jobs:
   publish:
@@ -41,17 +48,58 @@ jobs:
         with:
           node-version: 24
       - run: npm test
+      - name: Check version is new
+        # A failed ClawScan keeps the version reserved, so never spend a
+        # 30-minute publish on a version that is already out or tagged.
+        if: github.event_name == 'workflow_dispatch' && !inputs.dry_run
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "::error::Tag v$version already exists. Bump the version in package.json and CHANGELOG.md."
+            exit 1
+          fi
+          if published=$(curl -fsS "https://clawhub.ai/api/v1/packages/$PACKAGE/versions?limit=100" | jq -r '.items[].version'); then
+            if grep -qxF "$version" <<<"$published"; then
+              echo "::error::$PACKAGE@$version is already published on ClawHub. Bump the version in package.json and CHANGELOG.md."
+              exit 1
+            fi
+          else
+            echo "::warning::Could not list published versions on ClawHub; continuing."
+          fi
       - name: Publish to ClawHub
         env:
           DRY_RUN: ${{ github.event_name != 'workflow_dispatch' || inputs.dry_run }}
           CHANGELOG: ${{ inputs.changelog }}
         run: |
-          args=(package publish . --family code-plugin --no-input
+          version=$(node -p "require('./package.json').version")
+          notes=$(node .github/release-notes.mjs)
+          args=(package publish . --family code-plugin --no-input --changelog "$notes"
                 --source-repo "$GITHUB_REPOSITORY" --source-commit "$GITHUB_SHA" --source-ref "$GITHUB_REF")
           if [[ "$DRY_RUN" == "true" ]]; then
             args+=(--dry-run)
           else
             args+=(--wait --wait-timeout 1800)
           fi
-          if [[ -n "$CHANGELOG" ]]; then args+=(--changelog "$CHANGELOG"); fi
-          npx --yes clawhub@0.23.3 "${args[@]}"
+          if ! npx --yes clawhub@0.23.3 "${args[@]}"; then
+            if [[ "$DRY_RUN" != "true" ]]; then
+              echo "::error::Publishing $PACKAGE@$version failed. If ClawScan failed before returning a verdict, the attempt keeps $version reserved and a re-run is rejected: report the attempt id at https://github.com/openclaw/clawhub/issues or bump the version."
+            fi
+            exit 1
+          fi
+
+  release:
+    needs: publish
+    if: github.event_name == 'workflow_dispatch' && !inputs.dry_run
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Tag and create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANGELOG: ${{ inputs.changelog }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          node .github/release-notes.mjs > "$RUNNER_TEMP/notes.md"
+          gh release create "v$version" --target "$GITHUB_SHA" --title "v$version" --notes-file "$RUNNER_TEMP/notes.md"
