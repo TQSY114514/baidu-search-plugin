@@ -2,11 +2,13 @@
 // 幂等：同一天只记录一次；当天重复运行只更新数值不新增点
 // 数据：series = [{date, downloads}] 累计下载数；values/dates 为平铺数组（供 shields.io sparkline 使用）
 //
-// 数据源说明（2026-08-12 起）：ClawHub 改版下线了公开 JSON API（/api/v1/packages/... 已 404），
-// 改为抓详情页 SSR 内嵌数据，形如：...downloads:19,installs:3,stars:0,versions:4...
+// 数据源：优先用 ClawHub 公开 JSON API 的 package.stats.downloads；
+// API 不可用时（2026-08 改版期间曾 404 过）退回抓详情页 SSR 内嵌数据，形如：
+// ...downloads:19,installs:3,stars:0,versions:4...
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+const API = 'https://clawhub.ai/api/v1/packages/@tqsy114514/baidu-search-plugin';
 const PAGE = 'https://clawhub.ai/tqsy114514/plugins/baidu-search-plugin';
 const FILE = join(process.cwd(), 'downloads.json');
 
@@ -18,7 +20,20 @@ const fmt = new Intl.DateTimeFormat('en-CA', {
   day: '2-digit',
 });
 
+async function fetchDownloadsFromApi() {
+  const res = await fetch(API);
+  if (!res.ok) throw new Error(`ClawHub API responded ${res.status}`);
+  const downloads = (await res.json())?.package?.stats?.downloads;
+  if (!Number.isInteger(downloads)) throw new Error('package.stats.downloads missing from ClawHub API');
+  return downloads;
+}
+
 async function fetchDownloads() {
+  try {
+    return await fetchDownloadsFromApi();
+  } catch (err) {
+    console.warn(`::warning::${err.message}; falling back to the plugin page`);
+  }
   const res = await fetch(PAGE);
   if (!res.ok) throw new Error(`ClawHub page responded ${res.status}`);
   const html = await res.text();
