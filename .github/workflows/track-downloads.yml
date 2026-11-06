@@ -1,5 +1,8 @@
 name: Track ClawHub downloads
 
+# The data (downloads.json) and chart (chart.svg) live on the `stats` branch so
+# the daily commits stay out of master's history. The scripts run from master
+# and write into the `stats` checkout.
 on:
   schedule:
     # 每天 15:00 UTC = 北京时间 23:00（记录当天完整累计，深夜负载低）
@@ -18,16 +21,27 @@ jobs:
   track:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout scripts
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout stats branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: stats
+          path: stats
 
       - name: Fetch downloads and update data
-        run: node .github/track-downloads.mjs
+        working-directory: stats
+        run: node ../.github/track-downloads.mjs
 
       - name: Render chart SVG
-        run: node .github/render-chart.mjs
+        working-directory: stats
+        run: node ../.github/render-chart.mjs
 
       - name: Commit if changed
+        working-directory: stats
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

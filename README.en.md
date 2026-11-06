@@ -2,12 +2,12 @@
 
 [中文](README.md) | English
 
-![ClawHub downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FTQSY114514%2Fbaidu-search-plugin%2Fmaster%2Fdownloads.json&query=latest&label=ClawHub%20downloads&color=success&style=for-the-badge)
+![ClawHub downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FTQSY114514%2Fbaidu-search-plugin%2Fstats%2Fdownloads.json&query=latest&label=ClawHub%20downloads&color=success&style=for-the-badge)
 
-<img src="chart.svg" alt="ClawHub downloads trend" width="720">
+<img src="https://raw.githubusercontent.com/TQSY114514/baidu-search-plugin/stats/chart.svg" alt="ClawHub downloads trend" width="720">
 
 > The trend chart is redrawn daily by GitHub Actions scraping the ClawHub plugin page
-> (see `.github/workflows/track-downloads.yml`); history lives in [`downloads.json`](downloads.json).
+> (see `.github/workflows/track-downloads.yml`); data and chart live on the separate `stats` branch, history in [`downloads.json`](https://github.com/TQSY114514/baidu-search-plugin/blob/stats/downloads.json).
 
 Brings Baidu search to OpenClaw's `web_search` tool. Calls Baidu Qianfan's
 "Baidu AI Search → Baidu Search" API (`v2/ai_search/web_search`) and returns

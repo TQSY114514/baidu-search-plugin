@@ -1,10 +1,10 @@
 // 根据 downloads.json 渲染 chart.svg（累计下载曲线图，纯 Node 无依赖）
-// 由 GitHub Actions 在更新数据后自动调用；也可本地手动运行
+// 由 GitHub Actions 在更新数据后自动调用；也可在 stats 分支的检出目录里手动运行
+// 读写当前目录下的 downloads.json / chart.svg（与 track-downloads.mjs 一致）
 import { readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const root = process.cwd();
 const data = JSON.parse(readFileSync(join(root, 'downloads.json'), 'utf8'));
 const series = data.series;
 

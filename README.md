@@ -2,12 +2,12 @@
 
 [English](README.en.md) | 中文
 
-![ClawHub downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FTQSY114514%2Fbaidu-search-plugin%2Fmaster%2Fdownloads.json&query=latest&label=ClawHub%20downloads&color=success&style=for-the-badge)
+![ClawHub downloads](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2FTQSY114514%2Fbaidu-search-plugin%2Fstats%2Fdownloads.json&query=latest&label=ClawHub%20downloads&color=success&style=for-the-badge)
 
-<img src="chart.svg" alt="ClawHub downloads trend" width="720">
+<img src="https://raw.githubusercontent.com/TQSY114514/baidu-search-plugin/stats/chart.svg" alt="ClawHub downloads trend" width="720">
 
 > 趋势图数据由 GitHub Actions 每天自动抓取 ClawHub 插件页面并重绘（见 `.github/workflows/track-downloads.yml`），
-> 历史数据见 [`downloads.json`](downloads.json)。
+> 数据和图表放在单独的 `stats` 分支，历史数据见 [`downloads.json`](https://github.com/TQSY114514/baidu-search-plugin/blob/stats/downloads.json)。
 
 把百度搜索接入 OpenClaw 的 `web_search` 工具。调用百度千帆「百度 AI 搜索 → 百度搜索」接口
 （`v2/ai_search/web_search`），返回结构化结果：标题、链接、摘要、发布时间、站点名。
