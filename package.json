@@ -20,7 +20,6 @@
     "extensions": ["./index.js"],
     "install": {
       "clawhubSpec": "clawhub:@tqsy114514/baidu-search-plugin",
-      "npmSpec": "@tqsy114514/baidu-search-plugin",
       "defaultChoice": "clawhub",
       "minHostVersion": ">=2026.9.4",
       "allowInvalidConfigRecovery": true

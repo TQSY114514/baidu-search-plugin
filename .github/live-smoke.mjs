@@ -1,6 +1,6 @@
 // Live smoke test against the real Baidu API (replaces calibrate.mjs).
 // Uses the plugin's own request builder / result mapper, so it verifies that
-// Baidu accepts exactly the bodies the plugin sends. 4 calls per run.
+// Baidu accepts exactly the bodies the plugin sends. 5 calls per run.
 //
 //   BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs
 //
@@ -51,6 +51,15 @@ const cases = [
     name: "one-sided date_before",
     params: { query: "李白 静夜思 赏析", count: 5, timeFilters: { dateBefore: "2020-12-31" } },
     check: (results, f) => checkDateRange(results, f),
+  },
+  {
+    // "day" is sent as an absolute Beijing yesterday..today page_time range.
+    name: "freshness pd",
+    params: { query: "人工智能", count: 5, timeFilters: { freshness: "pd" } },
+    check: (results, _f, body) => {
+      const { gte, lte } = body.search_filter.range.page_time;
+      return checkDateRange(results, { dateAfter: gte, dateBefore: lte });
+    },
   },
   {
     name: "long query (enable_rewrite)",

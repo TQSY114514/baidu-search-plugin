@@ -128,8 +128,19 @@ test("normalizeFreshness: pd/pw/pm/py map to Baidu recency values", () => {
   assert.equal(normalizeFreshness(undefined), undefined);
 });
 
-test("buildBaiduRequestBody: pd-style freshness maps to search_recency_filter", () => {
-  for (const [input, expected] of [["pd", "day"], ["pw", "week"], ["pm", "month"], ["py", "year"]]) {
+test("buildBaiduRequestBody: day freshness becomes an absolute Beijing yesterday..today range", () => {
+  // 17:30 UTC is already the next day in Beijing (UTC+8).
+  const now = Date.parse("2026-03-01T17:30:00Z");
+  for (const freshness of ["pd", "day"]) {
+    const body = buildBaiduRequestBody({ query: "q", count: 5, timeFilters: { freshness }, sites: ["a.example"], now });
+    assert.deepEqual(body.search_filter.range, { page_time: { gte: "2026-03-01", lte: "2026-03-02" } }, freshness);
+    assert.deepEqual(body.search_filter.match.site, ["a.example"]);
+    assert.equal(body.search_recency_filter, undefined, `${freshness}: "day" is not a documented recency value`);
+  }
+});
+
+test("buildBaiduRequestBody: pw/pm/py freshness maps to search_recency_filter", () => {
+  for (const [input, expected] of [["pw", "week"], ["pm", "month"], ["py", "year"]]) {
     const body = buildBaiduRequestBody({
       query: "q",
       count: 5,
@@ -345,6 +356,32 @@ test("normalizeSiteList: reduces values to bare deduped hosts", () => {
     ["baidu.com", "github.com"],
   );
   assert.deepEqual(normalizeSiteList(undefined), []);
+});
+
+test("normalizeSiteList: caps at 20 distinct hosts after deduping", () => {
+  const values = ["dup.example", "DUP.example", ...Array.from({ length: 25 }, (_, i) => `s${i}.example`)];
+  const sites = normalizeSiteList(values);
+  assert.equal(sites.length, 20);
+  assert.deepEqual(sites.slice(0, 2), ["dup.example", "s0.example"]);
+  assert.equal(sites[19], "s18.example");
+});
+
+test("buildBaiduRequestBody: block_websites is capped at Baidu's 20-site limit", () => {
+  const excludedSites = Array.from({ length: 25 }, (_, i) => `s${i}.example`);
+  const body = buildBaiduRequestBody({ query: "q", count: 5, excludedSites });
+  assert.deepEqual(body.block_websites, excludedSites.slice(0, 20));
+});
+
+test("buildBaiduRequestBody: edition/safe_search are sent only when they differ from Baidu's defaults", () => {
+  const plain = buildBaiduRequestBody({ query: "q", count: 5, edition: "standard", safeSearch: false });
+  assert.equal("edition" in plain, false);
+  assert.equal("safe_search" in plain, false);
+  const tuned = buildBaiduRequestBody({ query: "q", count: 5, edition: "turbo", safeSearch: true });
+  assert.equal(tuned.edition, "turbo");
+  assert.equal(tuned.safe_search, true);
+  const bogus = buildBaiduRequestBody({ query: "q", count: 5, edition: "lite", safeSearch: "yes" });
+  assert.equal("edition" in bogus, false);
+  assert.equal("safe_search" in bogus, false);
 });
 
 test("readRetryAfterMs: reads the SDK's retryAfterMs, then raw headers, and clamps", () => {

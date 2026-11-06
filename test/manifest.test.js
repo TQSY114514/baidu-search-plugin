@@ -24,6 +24,8 @@ test("package.json: valid JSON with expected openclaw metadata", () => {
   assert.deepEqual(pkg.openclaw.extensions, ["./index.js"]);
   assert.equal(pkg.openclaw.install.defaultChoice, "clawhub");
   assert.equal(pkg.openclaw.install.clawhubSpec, "clawhub:@tqsy114514/baidu-search-plugin");
+  // Not published to npm: a declared npmSpec makes default installs try npm first.
+  assert.equal(pkg.openclaw.install.npmSpec, undefined);
   assert.equal(pkg.openclaw.release.publishToClawHub, true);
 });
 

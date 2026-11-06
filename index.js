@@ -181,6 +181,11 @@ export async function executeBaiduSearch(args, searchConfig, signal) {
 
   const sites = normalizeSiteList(readStringArrayParam(args, "site") ?? []);
   const excludedSites = normalizeSiteList(readStringArrayParam(args, "exclude_sites") ?? []);
+  // Plugin-scoped settings (plugins.entries.baidu.config.webSearch.*), which
+  // mergeScopedSearchConfig attaches under the provider id.
+  const pluginSettings = searchConfig?.baidu;
+  const edition = pluginSettings?.edition === "turbo" ? "turbo" : "standard";
+  const safeSearch = pluginSettings?.safeSearch === true;
 
   const cacheKey = buildSearchCacheKey([
     "baidu",
@@ -191,6 +196,8 @@ export async function executeBaiduSearch(args, searchConfig, signal) {
     timeFilters.dateBefore ?? "",
     sites.join(","),
     excludedSites.join(","),
+    edition,
+    safeSearch ? "safe" : "",
   ]);
   signal?.throwIfAborted();
   const cached = readCachedSearchPayload(cacheKey);
@@ -205,7 +212,15 @@ export async function executeBaiduSearch(args, searchConfig, signal) {
         searchConfig,
         cacheKey,
         query: finalQuery,
-        body: buildBaiduRequestBody({ query: finalQuery, count, timeFilters, sites, excludedSites }),
+        body: buildBaiduRequestBody({
+          query: finalQuery,
+          count,
+          timeFilters,
+          sites,
+          excludedSites,
+          edition,
+          safeSearch,
+        }),
         signal: sharedSignal,
       }),
     signal,

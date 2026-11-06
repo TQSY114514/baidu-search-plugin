@@ -188,6 +188,34 @@ test("cancellation: when every caller aborts, the request is aborted and not ret
   assert.equal((await executeBaiduSearch({ query: "gone" }, KEY)).count, 1);
 });
 
+test("cancellation during retry backoff stops without another request", async () => {
+  serve(() => json({}, { status: 503 }));
+  const ac = new AbortController();
+  const started = Date.now();
+  const pending = executeBaiduSearch({ query: "backoff" }, KEY, ac.signal);
+  setTimeout(() => ac.abort(), 50);
+  await assert.rejects(pending, { name: "AbortError" });
+  assert.ok(Date.now() - started < 250, "woke before the 300ms backoff ended");
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal(calls.length, 1);
+});
+
+test("plugin config: edition and safeSearch reach the request and split the cache", async () => {
+  let provider;
+  plugin.register({ registerWebSearchProvider: (p) => (provider = p) });
+  const toolFor = (webSearch) =>
+    provider.createTool({ config: { plugins: { entries: { baidu: { config: { webSearch } } } } }, searchConfig: {} });
+  serve(ok);
+  await toolFor({ ...KEY, edition: "turbo", safeSearch: true }).execute({ query: "cfg" }, {});
+  await toolFor(KEY).execute({ query: "cfg" }, {});
+  assert.equal(calls.length, 2);
+  const [tuned, plain] = calls.map((c) => JSON.parse(c.init.body));
+  assert.equal(tuned.edition, "turbo");
+  assert.equal(tuned.safe_search, true);
+  assert.equal(plain.edition, undefined);
+  assert.equal(plain.safe_search, undefined);
+});
+
 test("pre-aborted signal: throws without a request", async () => {
   serve(ok);
   await assert.rejects(executeBaiduSearch({ query: "pre" }, KEY, AbortSignal.abort()), { name: "AbortError" });

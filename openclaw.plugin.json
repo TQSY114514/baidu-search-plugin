@@ -19,6 +19,13 @@
         "properties": {
           "apiKey": {
             "type": ["string", "object"]
+          },
+          "edition": {
+            "type": "string",
+            "enum": ["standard", "turbo"]
+          },
+          "safeSearch": {
+            "type": "boolean"
           }
         }
       }
@@ -29,6 +36,14 @@
       "label": "Baidu Qianfan AI Search API Key",
       "help": "在 https://console.bce.baidu.com/ai-search/qianfan/ais/console/apiKey 创建的 bce-v3/ALTAK-... 格式 API Key（整串都是 Key，不是 AK/SK）。也可用 BAIDU_API_KEY / QIANFAN_API_KEY 环境变量，或用 SecretRef 引用已存密钥。",
       "sensitive": true
+    },
+    "webSearch.edition": {
+      "label": "Baidu search edition",
+      "help": "standard（标准版，默认）或 turbo（增强版）。两者计费不同，详见 https://cloud.baidu.com/doc/qianfan/s/1mh4sv6c4"
+    },
+    "webSearch.safeSearch": {
+      "label": "Baidu safe search",
+      "help": "开启后百度采用更严格的风控策略，部分涉黄、涉恐 query 不返回结果。默认关闭。"
     }
   }
 }

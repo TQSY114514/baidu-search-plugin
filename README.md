@@ -129,7 +129,7 @@ openclaw secrets reload
 | `date_after` | 只要这一天及之后发布的结果，`YYYY-MM-DD` | 无 |
 | `date_before` | 只要这一天及之前发布的结果，`YYYY-MM-DD` | 无 |
 | `site` | 只在这些站点里搜，字符串或数组；`site:Baidu.com`、`https://baidu.com/x` 都会归一化成 `baidu.com`；最多 20 个（百度上限） | 无 |
-| `exclude_sites` | 屏蔽这些站点，字符串或数组；归一化规则同 `site` | 无 |
+| `exclude_sites` | 屏蔽这些站点，字符串或数组；归一化规则同 `site`；最多 20 个（百度上限） | 无 |
 
 ## 返回结果
 
@@ -164,6 +164,20 @@ openclaw config set tools.web.search.cacheTtlMinutes 60
 
 另外，同一时间发起的相同搜索会自动合并成一次请求，只消耗一次额度。
 
+## 搜索版本与安全搜索
+
+这两项是插件自己的配置，放在 `plugins.entries.baidu.config.webSearch` 下：
+
+| 配置 | 说明 | 默认 |
+|---|---|---|
+| `edition` | `standard`（标准版）或 `turbo`（增强版）。两者计费不同，见[百度计费说明](https://cloud.baidu.com/doc/qianfan/s/1mh4sv6c4) | `standard` |
+| `safeSearch` | 开启百度安全搜索：采用更严格的风控策略，部分涉黄、涉恐 query 不返回结果 | `false` |
+
+```bash
+openclaw config set plugins.entries.baidu.config.webSearch.edition turbo
+openclaw config set plugins.entries.baidu.config.webSearch.safeSearch true --strict-json
+```
+
 ## 常见错误
 
 插件遇到下面这些错误时，会在错误信息里附带中文处理建议
@@ -186,11 +200,13 @@ openclaw config set tools.web.search.cacheTtlMinutes 60
 - 端点：`POST https://qianfan.baidubce.com/v2/ai_search/web_search`
 - 鉴权：`Authorization: Bearer <bce-v3/ALTAK-...>`，附 `X-Appbuilder-From: openclaw`
 - 请求体：`{"messages":[{"role":"user","content":"<query>"}], "search_source":"baidu_search_v2", "resource_type_filter":[{"type":"web","top_k":<count>}]}`，再加上可选过滤条件：
-  - `freshness` → 顶层 `search_recency_filter`（`day`/`week`/`month`/`year`）
+  - `freshness` 为周 / 月 / 年 → 顶层 `search_recency_filter`（`week`/`month`/`year`）；
+    近一天（`pd`/`day`）不在百度的取值范围里，改为按北京时间「昨天～今天」的 `page_time` 范围
   - `date_after`/`date_before` → `search_filter.range.page_time {gte, lte}`（两端都包含）。
     实测百度要求两端都是具体日期，否则会忽略过滤或报错，所以只给一侧时，另一侧补 `2000-01-01` / `2099-12-31`
   - `site` → `search_filter.match.site`；`exclude_sites` → `block_websites`
   - query 超过 72 个字符 → `query_policy.enable_rewrite: true`
+  - 配置了 `edition: turbo` → `edition`；`safeSearch: true` → `safe_search`
 - 百度返回 `code != 0`（数字码，或 `QUOTA_USER_DAILY_FREE` 这类字符串码）时，
   返回结构化的 `baidu_search_error`（带 `code`、`requestId`、`hint`），不会抛异常打断工具循环
 

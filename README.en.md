@@ -133,7 +133,7 @@ Besides `query`, `web_search` accepts these optional parameters (exposed via the
 | `date_after` | Only results published on or after this date, `YYYY-MM-DD` | none |
 | `date_before` | Only results published on or before this date, `YYYY-MM-DD` | none |
 | `site` | Only search these sites, string or array; `site:Baidu.com` and `https://baidu.com/x` both normalize to `baidu.com`; at most 20 (Baidu limit) | none |
-| `exclude_sites` | Exclude these sites, string or array; normalized like `site` | none |
+| `exclude_sites` | Exclude these sites, string or array; normalized like `site`; at most 20 (Baidu limit) | none |
 
 ## Results
 
@@ -168,6 +168,20 @@ openclaw config set tools.web.search.cacheTtlMinutes 60
 
 Identical searches issued at the same time are also merged into one request and use one call of quota.
 
+## Search edition and safe search
+
+These are the plugin's own settings, under `plugins.entries.baidu.config.webSearch`:
+
+| Setting | Description | Default |
+|---|---|---|
+| `edition` | `standard` or `turbo` (enhanced). They are billed differently, see [Baidu pricing](https://cloud.baidu.com/doc/qianfan/s/1mh4sv6c4) | `standard` |
+| `safeSearch` | Turn on Baidu safe search: stricter filtering, so some adult or terrorism-related queries return no results | `false` |
+
+```bash
+openclaw config set plugins.entries.baidu.config.webSearch.edition turbo
+openclaw config set plugins.entries.baidu.config.webSearch.safeSearch true --strict-json
+```
+
 ## Common errors
 
 For these errors the plugin adds a fix-it hint (the `hint` field on structured errors,
@@ -190,12 +204,14 @@ balance are not. Cancelling the tool call stops the request and any retry wait i
 - Endpoint: `POST https://qianfan.baidubce.com/v2/ai_search/web_search`
 - Auth: `Authorization: Bearer <bce-v3/ALTAK-...>` with `X-Appbuilder-From: openclaw`
 - Body: `{"messages":[{"role":"user","content":"<query>"}], "search_source":"baidu_search_v2", "resource_type_filter":[{"type":"web","top_k":<count>}]}` plus optional filters:
-  - `freshness` → top-level `search_recency_filter` (`day`/`week`/`month`/`year`)
+  - week / month / year `freshness` → top-level `search_recency_filter` (`week`/`month`/`year`);
+    past day (`pd`/`day`) is not a Baidu recency value, so it becomes a Beijing-date yesterday..today `page_time` range
   - `date_after`/`date_before` → `search_filter.range.page_time {gte, lte}` (both inclusive).
     Live testing shows Baidu needs absolute dates on both sides (otherwise it ignores the filter or errors),
     so a missing side is filled with `2000-01-01` / `2099-12-31`
   - `site` → `search_filter.match.site`; `exclude_sites` → `block_websites`
   - queries over 72 chars → `query_policy.enable_rewrite: true`
+  - configured `edition: turbo` → `edition`; `safeSearch: true` → `safe_search`
 - A Baidu `code != 0` response (numeric, or symbolic like `QUOTA_USER_DAILY_FREE`) returns a
   structured `baidu_search_error` (with `code`, `requestId`, `hint`) instead of throwing into the tool loop
 
