@@ -7,7 +7,10 @@ register("./fixtures/openclaw-sdk-loader.mjs", import.meta.url);
 const { default: plugin, executeBaiduSearch } = await import("../index.js");
 const sdk = await import("openclaw/plugin-sdk/provider-web-search");
 
-const KEY = { apiKey: "bce-v3/ALTAK-test" };
+// qps 0 turns the shared rate limiter off, so tests don't queue behind each
+// other; the limiter has its own tests below.
+const NO_LIMIT = { baidu: { qps: 0 } };
+const KEY = { apiKey: "bce-v3/ALTAK-test", ...NO_LIMIT };
 let calls;
 
 function json(body, init = {}) {
@@ -82,7 +85,7 @@ test("missing key: structured error, no request", async () => {
 test("env key is used when config has none", async () => {
   process.env.QIANFAN_API_KEY = "bce-v3/ALTAK-env";
   serve(ok);
-  await executeBaiduSearch({ query: "env" }, {});
+  await executeBaiduSearch({ query: "env" }, NO_LIMIT);
   assert.equal(calls[0].init.headers.Authorization, "Bearer bce-v3/ALTAK-env");
 });
 
@@ -206,14 +209,32 @@ test("plugin config: edition and safeSearch reach the request and split the cach
   const toolFor = (webSearch) =>
     provider.createTool({ config: { plugins: { entries: { baidu: { config: { webSearch } } } } }, searchConfig: {} });
   serve(ok);
-  await toolFor({ ...KEY, edition: "turbo", safeSearch: true }).execute({ query: "cfg" }, {});
-  await toolFor(KEY).execute({ query: "cfg" }, {});
+  const apiKey = KEY.apiKey;
+  await toolFor({ apiKey, qps: 0, edition: "turbo", safeSearch: true }).execute({ query: "cfg" }, {});
+  await toolFor({ apiKey, qps: 0 }).execute({ query: "cfg" }, {});
   assert.equal(calls.length, 2);
   const [tuned, plain] = calls.map((c) => JSON.parse(c.init.body));
   assert.equal(tuned.edition, "turbo");
   assert.equal(tuned.safe_search, true);
   assert.equal(plain.edition, undefined);
   assert.equal(plain.safe_search, undefined);
+});
+
+test("rate limit: by default different parallel searches start at least 1s apart", async () => {
+  const startedAt = [];
+  serve(() => {
+    startedAt.push(Date.now());
+    return ok();
+  });
+  const key = { apiKey: KEY.apiKey };
+  const [a, b] = await Promise.all([
+    executeBaiduSearch({ query: "first" }, key),
+    executeBaiduSearch({ query: "second" }, key),
+  ]);
+  assert.equal(a.count, 1);
+  assert.equal(b.count, 1);
+  assert.equal(calls.length, 2);
+  assert.ok(startedAt[1] - startedAt[0] >= 950, `second started ${startedAt[1] - startedAt[0]}ms after the first`);
 });
 
 test("pre-aborted signal: throws without a request", async () => {
@@ -227,7 +248,7 @@ test("plugin: registers the baidu provider and forwards the tool signal", async 
   plugin.register({ registerWebSearchProvider: (p) => (provider = p) });
   assert.equal(provider.id, "baidu");
   const tool = provider.createTool({
-    config: { plugins: { entries: { baidu: { config: { webSearch: { apiKey: "bce-v3/ALTAK-plugin" } } } } } },
+    config: { plugins: { entries: { baidu: { config: { webSearch: { apiKey: "bce-v3/ALTAK-plugin", qps: 0 } } } } } },
     searchConfig: { cacheTtlMinutes: 1 },
   });
   assert.equal(tool.parameters.properties.count.type, "integer");

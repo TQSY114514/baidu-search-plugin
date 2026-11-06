@@ -26,6 +26,11 @@
           },
           "safeSearch": {
             "type": "boolean"
+          },
+          "qps": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
           }
         }
       }
@@ -44,6 +49,10 @@
     "webSearch.safeSearch": {
       "label": "Baidu safe search",
       "help": "开启后百度采用更严格的风控策略，部分涉黄、涉恐 query 不返回结果。默认关闭。"
+    },
+    "webSearch.qps": {
+      "label": "Max requests per second",
+      "help": "插件每秒最多向百度发几次请求，多出的搜索排队等待，避免触发限流。免费额度是 1 QPS（默认），开通后付费为 3 QPS；0 表示不限速。"
     }
   }
 }

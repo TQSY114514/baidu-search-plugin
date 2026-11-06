@@ -168,7 +168,7 @@ openclaw config set tools.web.search.cacheTtlMinutes 60
 
 Identical searches issued at the same time are also merged into one request and use one call of quota.
 
-## Search edition and safe search
+## Plugin settings
 
 These are the plugin's own settings, under `plugins.entries.baidu.config.webSearch`:
 
@@ -176,10 +176,12 @@ These are the plugin's own settings, under `plugins.entries.baidu.config.webSear
 |---|---|---|
 | `edition` | `standard` or `turbo` (enhanced). They are billed differently, see [Baidu pricing](https://cloud.baidu.com/doc/qianfan/s/1mh4sv6c4) | `standard` |
 | `safeSearch` | Turn on Baidu safe search: stricter filtering, so some adult or terrorism-related queries return no results | `false` |
+| `qps` | Max requests per second; extra searches wait in line instead of hitting Baidu's rate limit. The free tier allows 1 QPS; with pay-as-you-go set `3`; `0` disables the limit | `1` |
 
 ```bash
 openclaw config set plugins.entries.baidu.config.webSearch.edition turbo
 openclaw config set plugins.entries.baidu.config.webSearch.safeSearch true --strict-json
+openclaw config set plugins.entries.baidu.config.webSearch.qps 3 --strict-json
 ```
 
 ## Common errors

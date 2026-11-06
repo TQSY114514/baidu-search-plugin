@@ -41,6 +41,7 @@ import {
   resolveBaiduErrorHint,
   truncateByCodePoints,
 } from "./lib/search-params.js";
+import { createRateLimiter, normalizeQps } from "./lib/rate-limit.js";
 import { createSingleFlight } from "./lib/single-flight.js";
 
 const BAIDU_CREDENTIAL_PATH = "plugins.entries.baidu.config.webSearch.apiKey";
@@ -49,6 +50,8 @@ const BAIDU_DOCS_URL = "https://docs.openclaw.ai/tools/web";
 const MAX_QUERY_LENGTH = 500;
 const RETRY_DELAYS_MS = [300, 800];
 const searchFlight = createSingleFlight();
+// Shared by every search in this process: Baidu enforces QPS per account.
+const reserveRequestSlot = createRateLimiter();
 
 // Sleeps for the backoff delay, waking early (and throwing) on cancellation.
 function sleep(ms, signal) {
@@ -186,6 +189,7 @@ export async function executeBaiduSearch(args, searchConfig, signal) {
   const pluginSettings = searchConfig?.baidu;
   const edition = pluginSettings?.edition === "turbo" ? "turbo" : "standard";
   const safeSearch = pluginSettings?.safeSearch === true;
+  const qps = normalizeQps(pluginSettings?.qps);
 
   const cacheKey = buildSearchCacheKey([
     "baidu",
@@ -210,6 +214,7 @@ export async function executeBaiduSearch(args, searchConfig, signal) {
       fetchBaiduSearch({
         apiKey,
         searchConfig,
+        qps,
         cacheKey,
         query: finalQuery,
         body: buildBaiduRequestBody({
@@ -227,12 +232,15 @@ export async function executeBaiduSearch(args, searchConfig, signal) {
   );
 }
 
-async function fetchBaiduSearch({ apiKey, searchConfig, cacheKey, query, body, signal }) {
+async function fetchBaiduSearch({ apiKey, searchConfig, qps, cacheKey, query, body, signal }) {
   const start = Date.now();
   let data;
   let attempt = 0;
   for (;;) {
     try {
+      // Retries count against the QPS limit too, so every attempt queues.
+      const wait = reserveRequestSlot(qps);
+      if (wait > 0) await sleep(wait, signal);
       data = await withTrustedWebSearchEndpoint(
         {
           url: BAIDU_SEARCH_ENDPOINT,

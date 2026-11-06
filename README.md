@@ -164,18 +164,20 @@ openclaw config set tools.web.search.cacheTtlMinutes 60
 
 另外，同一时间发起的相同搜索会自动合并成一次请求，只消耗一次额度。
 
-## 搜索版本与安全搜索
+## 插件配置
 
-这两项是插件自己的配置，放在 `plugins.entries.baidu.config.webSearch` 下：
+下面几项是插件自己的配置，放在 `plugins.entries.baidu.config.webSearch` 下：
 
 | 配置 | 说明 | 默认 |
 |---|---|---|
 | `edition` | `standard`（标准版）或 `turbo`（增强版）。两者计费不同，见[百度计费说明](https://cloud.baidu.com/doc/qianfan/s/1mh4sv6c4) | `standard` |
 | `safeSearch` | 开启百度安全搜索：采用更严格的风控策略，部分涉黄、涉恐 query 不返回结果 | `false` |
+| `qps` | 每秒最多发几次请求，多出的搜索排队等待，不再撞百度限流。免费额度是 1 QPS，开通后付费可设为 `3`；`0` 不限速 | `1` |
 
 ```bash
 openclaw config set plugins.entries.baidu.config.webSearch.edition turbo
 openclaw config set plugins.entries.baidu.config.webSearch.safeSearch true --strict-json
+openclaw config set plugins.entries.baidu.config.webSearch.qps 3 --strict-json
 ```
 
 ## 常见错误
@@ -190,7 +192,7 @@ openclaw config set plugins.entries.baidu.config.webSearch.safeSearch true --str
 | 403 | Key 没有百度 AI 搜索权限 | 在 API Key 页面检查这个 Key 的服务 / 权限范围 |
 | `QUOTA_USER_DAILY_FREE` | 免费额度用完 | [开通后付费](https://console.bce.baidu.com/qianfan/studio/resource)，或等额度刷新 |
 | `BILLING_INSUFFICIENT_BALANCE` | 账户欠费 | [充值](https://console.bce.baidu.com/finance/recharge) |
-| 429、`RATE_LIMIT_*` | 请求太频繁（免费额度限 1 QPS，开通后付费为 3 QPS） | 稍后再试；插件会自动按 `Retry-After` 重试 |
+| 429、`RATE_LIMIT_*` | 请求太频繁（免费额度限 1 QPS，开通后付费为 3 QPS） | 稍后再试；插件会自动按 `Retry-After` 重试。检查 [`qps`](#插件配置) 是否高于账号的实际限额 |
 
 网络错误、超时、502/503/504 等临时错误会自动重试最多 2 次；额度用完和欠费不会重试。
 工具调用被取消时，请求和重试等待都会立即停止。
