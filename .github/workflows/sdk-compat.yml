@@ -28,5 +28,5 @@ jobs:
         with:
           node-version: 24
       - name: Install openclaw@${{ matrix.openclaw }}
-        run: npm install --no-save --no-audit --no-fund --ignore-scripts "openclaw@${{ matrix.openclaw }}"
+        run: npm install --no-package-lock --no-audit --no-fund --ignore-scripts "openclaw@${{ matrix.openclaw }}"
       - run: node --test .github/sdk-contract.mjs
