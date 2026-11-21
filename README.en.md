@@ -232,8 +232,8 @@ BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # live API smoke te
 ```
 
 - CI: the `test` workflow runs tests on Node 22/24/26 plus the type check
-- Live smoke: the `live-smoke` workflow runs daily at 01:00 UTC and on `lib/` / `index.js` changes;
-  it needs `BAIDU_API_KEY` under **Settings → Secrets and variables → Actions → Secrets**
+- Live smoke: the `live-smoke` workflow only runs when started manually from the Actions tab (5 calls of Baidu quota each);
+  run it after changing how requests are built. It needs `BAIDU_API_KEY` under **Settings → Secrets and variables → Actions → Secrets**
   (not Variables, which are plaintext) and skips without it
 - Releasing: bump the `package.json` version, add a matching section to `CHANGELOG.md` and push, then run **Package publish**
   from the Actions tab; it authenticates with ClawHub trusted publishing (GitHub OIDC), so no token is stored. Release notes

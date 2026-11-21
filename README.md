@@ -227,7 +227,7 @@ BAIDU_API_KEY=bce-v3/ALTAK-... node .github/live-smoke.mjs   # 真实接口冒�
 ```
 
 - CI：`test` workflow 在 Node 22/24/26 上跑测试并做类型检查
-- 真实接口冒烟：`live-smoke` workflow 每天北京时间 09:00 运行，`lib/`、`index.js` 有改动时也会运行；
+- 真实接口冒烟：`live-smoke` workflow 只在 Actions 里手动运行（每次 5 次调用，消耗百度额度），改了请求构造时跑一次；
   需要在仓库的 **Settings → Secrets and variables → Actions → Secrets** 里添加 `BAIDU_API_KEY`
   （不要加在 Variables 里，那里是明文），没配置时自动跳过
 - 发布：先升级 `package.json` 版本号、在 `CHANGELOG.md` 加上同名小节并推送，然后在 Actions 里手动运行 **Package publish**；
